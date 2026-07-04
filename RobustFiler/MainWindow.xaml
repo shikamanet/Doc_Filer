@@ -18,22 +18,35 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="RobustFiler">
-            <TitleBar.IconSource>
-                <ImageIconSource ImageSource="Assets/AppIcon.ico" />
-            </TitleBar.IconSource>
-            <TitleBar.Content>
-                <Grid HorizontalAlignment="Right">
-                    <Button Command="{x:Bind ViewModel.ToggleDualPaneCommand}"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Width="46" Height="32"
-                            ToolTipService.ToolTip="デュアルペイン">
-                        <SymbolIcon Symbol="TwoPage" />
-                    </Button>
-                </Grid>
-            </TitleBar.Content>
-        </TitleBar>
+        <Grid Grid.Row="0" Height="32" Background="Transparent">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <!-- Windows 11 system caption buttons width is approx 138px -->
+                <ColumnDefinition Width="140" /> 
+            </Grid.ColumnDefinitions>
+
+            <!-- Window Icon & Title -->
+            <StackPanel Orientation="Horizontal" Grid.Column="0" Spacing="12" Margin="12,0,0,0" IsHitTestVisible="False">
+                <Image Source="Assets/AppIcon.ico" Width="16" Height="16" VerticalAlignment="Center" />
+                <TextBlock Text="RobustFiler" VerticalAlignment="Center" FontSize="12" />
+            </StackPanel>
+
+            <!-- Dual Pane Button -->
+            <!-- Placed before the caption buttons -->
+            <Button Grid.Column="2"
+                    Command="{x:Bind ViewModel.ToggleDualPaneCommand}"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Width="36" Height="32"
+                    ToolTipService.ToolTip="デュアルペイン">
+                <!-- Make icon smaller -->
+                <Viewbox Width="14" Height="14">
+                    <SymbolIcon Symbol="TwoPage" />
+                </Viewbox>
+            </Button>
+        </Grid>
 
         <!--
             The Frame hosts pages for your application content. Add your UI to

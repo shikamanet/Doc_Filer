@@ -8,6 +8,7 @@ public class TabState
     public string PrimaryPath { get; set; } = string.Empty;
     public bool IsDualPane { get; set; }
     public string SecondaryPath { get; set; } = string.Empty;
+    public bool IsLocked { get; set; }
 }
 
 public class SessionState
