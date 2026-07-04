@@ -20,16 +20,7 @@
     </Page.Resources>
 
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
-        <CommandBar Grid.Row="0" DefaultLabelPosition="Right" Background="Transparent">
-            <AppBarToggleButton Label="デュアルペイン" Icon="TwoPage" Command="{x:Bind ViewModel.ToggleDualPaneCommand}" />
-        </CommandBar>
-
-        <Grid Grid.Row="1">
+        <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="250" MinWidth="150" MaxWidth="500" />
                 <ColumnDefinition Width="Auto" />

@@ -22,6 +22,17 @@
             <TitleBar.IconSource>
                 <ImageIconSource ImageSource="Assets/AppIcon.ico" />
             </TitleBar.IconSource>
+            <TitleBar.Content>
+                <Grid HorizontalAlignment="Right">
+                    <Button Command="{x:Bind ViewModel.ToggleDualPaneCommand}"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Width="46" Height="32"
+                            ToolTipService.ToolTip="デュアルペイン">
+                        <SymbolIcon Symbol="TwoPage" />
+                    </Button>
+                </Grid>
+            </TitleBar.Content>
         </TitleBar>
 
         <!--

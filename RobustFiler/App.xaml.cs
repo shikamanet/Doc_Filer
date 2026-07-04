@@ -45,7 +45,7 @@ public partial class App : Application
         services.AddSingleton<Services.IDialogService, Services.LocalDialogService>();
         
         // ViewModels
-        services.AddTransient<ViewModels.MainWindowViewModel>();
+        services.AddSingleton<ViewModels.MainWindowViewModel>();
         
         return services.BuildServiceProvider();
     }

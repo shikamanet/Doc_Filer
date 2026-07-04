@@ -12,8 +12,11 @@ namespace RobustFiler;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
+    public RobustFiler.ViewModels.MainWindowViewModel ViewModel { get; }
+
     public MainWindow()
     {
+        ViewModel = Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<RobustFiler.ViewModels.MainWindowViewModel>(App.Current.Services);
         InitializeComponent();
 
         ExtendsContentIntoTitleBar = true;
