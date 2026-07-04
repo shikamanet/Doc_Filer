@@ -12,6 +12,12 @@ using RobustFiler.Services;
 
 namespace RobustFiler.ViewModels;
 
+public class BreadcrumbItem
+{
+    public string Name { get; set; } = string.Empty;
+    public string Path { get; set; } = string.Empty;
+}
+
 public partial class FilePaneViewModel : ObservableObject, IDisposable
 {
     private readonly IFileService _fileService;
@@ -25,6 +31,8 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
 
     public ObservableCollection<FileNodeViewModel> RootDrives { get; } = new();
     public ObservableCollection<FileNodeViewModel> CurrentFolderItems { get; } = new();
+    public ObservableCollection<FileNodeViewModel> SelectedItems { get; } = new();
+    public ObservableCollection<BreadcrumbItem> BreadcrumbItems { get; } = new();
 
     public FilePaneViewModel(IFileService fileService, IDialogService dialogService)
     {
@@ -115,6 +123,7 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             if (Directory.Exists(path))
             {
                 CurrentPath = path;
+                UpdateBreadcrumbs(path);
                 await LoadFolderContentCoreAsync(path);
             }
             else
@@ -134,6 +143,24 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void UpdateBreadcrumbs(string path)
+    {
+        var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
+        dispatcherQueue?.TryEnqueue(() =>
+        {
+            BreadcrumbItems.Clear();
+            if (string.IsNullOrEmpty(path)) return;
+
+            var parts = path.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+            string current = "";
+            for (int i = 0; i < parts.Length; i++)
+            {
+                current += parts[i] + Path.DirectorySeparatorChar;
+                BreadcrumbItems.Add(new BreadcrumbItem { Name = parts[i], Path = current });
+            }
+        });
+    }
+
     private async Task LoadFolderContentCoreAsync(string path)
     {
         _fileService.StartWatch(path);
@@ -144,12 +171,27 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         {
             dispatcherQueue.TryEnqueue(() =>
             {
+                SelectedItems.Clear();
                 CurrentFolderItems.Clear();
                 foreach (var item in items)
                 {
                     CurrentFolderItems.Add(new FileNodeViewModel(item, _fileService));
                 }
             });
+        }
+    }
+
+    [RelayCommand]
+    public async Task OpenNodeAsync(FileNodeViewModel? node)
+    {
+        if (node == null) return;
+        if (node.IsDirectory)
+        {
+            await NavigateAsync(node.FullPath);
+        }
+        else
+        {
+            await _fileService.OpenFileAsync(node.FullPath);
         }
     }
 
@@ -169,8 +211,9 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public async Task RenameAsync(FileNodeViewModel? node)
+    public async Task RenameAsync()
     {
+        var node = SelectedItems.FirstOrDefault();
         if (node == null) return;
         var newName = await _dialogService.ShowInputDialogAsync("名前の変更", node.Name);
         if (!string.IsNullOrWhiteSpace(newName) && newName != node.Name)
@@ -183,18 +226,77 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public async Task DeleteAsync(FileNodeViewModel? node)
+    public async Task DeleteAsync()
     {
-        if (node == null) return;
-        if (await _dialogService.ShowConfirmationAsync("削除の確認", $"'{node.Name}' をごみ箱に移動しますか？"))
+        if (SelectedItems.Count == 0) return;
+        if (await _dialogService.ShowConfirmationAsync("削除の確認", $"{SelectedItems.Count} 個の項目をごみ箱に移動しますか？"))
         {
-            if (await _fileService.DeleteToRecycleBinAsync(node.FullPath))
+            var nodesToDelete = SelectedItems.ToList();
+            foreach (var node in nodesToDelete)
             {
-                CurrentFolderItems.Remove(node);
+                if (await _fileService.DeleteToRecycleBinAsync(node.FullPath))
+                {
+                    CurrentFolderItems.Remove(node);
+                }
+                else
+                {
+                    await _dialogService.ShowErrorAsync("エラー", new Exception($"'{node.Name}' を削除できませんでした。"));
+                }
             }
-            else
+            SelectedItems.Clear();
+        }
+    }
+
+    [RelayCommand]
+    public void CopyFiles()
+    {
+        if (SelectedItems.Count == 0) return;
+        var dataPackage = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        dataPackage.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+        string paths = string.Join("\n", SelectedItems.Select(x => x.FullPath));
+        dataPackage.SetText("COPY|" + paths);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dataPackage);
+    }
+
+    [RelayCommand]
+    public void CutFiles()
+    {
+        if (SelectedItems.Count == 0) return;
+        var dataPackage = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        dataPackage.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        string paths = string.Join("\n", SelectedItems.Select(x => x.FullPath));
+        dataPackage.SetText("MOVE|" + paths);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(dataPackage);
+    }
+
+    [RelayCommand]
+    public async Task PasteFilesAsync()
+    {
+        var dataPackageView = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+        if (dataPackageView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text))
+        {
+            try
             {
-                await _dialogService.ShowErrorAsync("エラー", new Exception("削除できませんでした。権限またはロックを確認してください。"));
+                var text = await dataPackageView.GetTextAsync();
+                if (string.IsNullOrEmpty(text)) return;
+                var parts = text.Split('|', 2);
+                if (parts.Length != 2) return;
+                var op = parts[0];
+                var paths = parts[1].Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+                if (op == "COPY")
+                {
+                    await _fileService.CopyFilesAsync(paths, CurrentPath);
+                }
+                else if (op == "MOVE")
+                {
+                    await _fileService.MoveFilesAsync(paths, CurrentPath);
+                    Windows.ApplicationModel.DataTransfer.Clipboard.Clear();
+                }
+            }
+            catch (Exception ex)
+            {
+                await _dialogService.ShowErrorAsync("エラー", ex);
             }
         }
     }

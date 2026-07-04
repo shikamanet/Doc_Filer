@@ -172,4 +172,96 @@ public class LocalFileService : IFileService
             }
         });
     }
+
+    public async Task OpenFileAsync(string path)
+    {
+        await Task.Run(() =>
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+                throw;
+            }
+        });
+    }
+
+    public async Task<bool> CopyFilesAsync(IEnumerable<string> sourcePaths, string destinationPath)
+    {
+        return await Task.Run(() =>
+        {
+            try
+            {
+                foreach (var path in sourcePaths)
+                {
+                    if (File.Exists(path))
+                    {
+                        var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                        File.Copy(path, dest, overwrite: true);
+                    }
+                    else if (Directory.Exists(path))
+                    {
+                        var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                        CopyDirectory(path, dest);
+                    }
+                }
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        });
+    }
+
+    public async Task<bool> MoveFilesAsync(IEnumerable<string> sourcePaths, string destinationPath)
+    {
+        return await Task.Run(() =>
+        {
+            try
+            {
+                foreach (var path in sourcePaths)
+                {
+                    var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                    if (File.Exists(path))
+                    {
+                        File.Move(path, dest, overwrite: true);
+                    }
+                    else if (Directory.Exists(path))
+                    {
+                        Directory.Move(path, dest);
+                    }
+                }
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        });
+    }
+
+    private static void CopyDirectory(string sourceDir, string destinationDir)
+    {
+        var dir = new DirectoryInfo(sourceDir);
+        Directory.CreateDirectory(destinationDir);
+
+        foreach (var file in dir.GetFiles())
+        {
+            var targetFilePath = Path.Combine(destinationDir, file.Name);
+            file.CopyTo(targetFilePath, true);
+        }
+
+        foreach (var subDir in dir.GetDirectories())
+        {
+            var newDestinationDir = Path.Combine(destinationDir, subDir.Name);
+            CopyDirectory(subDir.FullName, newDestinationDir);
+        }
+    }
 }

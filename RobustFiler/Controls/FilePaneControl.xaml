@@ -32,8 +32,7 @@
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" FontFamily="Segoe Fluent Icons" Content="&#xE72B;" Command="{x:Bind ViewModel.GoBackCommand}" ToolTipService.ToolTip="戻る" Margin="0,0,4,0"/>
             <Button Grid.Column="1" FontFamily="Segoe Fluent Icons" Content="&#xE72A;" Command="{x:Bind ViewModel.GoForwardCommand}" ToolTipService.ToolTip="進む" Margin="0,0,8,0"/>
-            <TextBox x:Name="AddressBar" Grid.Column="2" Text="{x:Bind ViewModel.CurrentPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" KeyDown="AddressBar_KeyDown" VerticalAlignment="Center" />
-            <Button Grid.Column="3" FontFamily="Segoe Fluent Icons" Content="&#xE8A4;" Command="{x:Bind ViewModel.NavigateCommand}" CommandParameter="{x:Bind AddressBar.Text, Mode=OneWay}" ToolTipService.ToolTip="移動" Margin="8,0,0,0"/>
+            <BreadcrumbBar Grid.Column="2" ItemsSource="{x:Bind ViewModel.BreadcrumbItems, Mode=OneWay}" ItemClicked="BreadcrumbBar_ItemClicked" VerticalAlignment="Center" Margin="4"/>
         </Grid>
 
         <!-- Main Content Area -->
@@ -64,6 +63,8 @@
             <Grid Grid.Column="2" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
                 <Grid.ContextFlyout>
                     <MenuFlyout>
+                        <MenuFlyoutItem Text="貼り付け" Command="{x:Bind ViewModel.PasteFilesCommand}" />
+                        <MenuFlyoutSeparator />
                         <MenuFlyoutItem Text="新しいフォルダー" Command="{x:Bind ViewModel.CreateFolderCommand}" />
                     </MenuFlyout>
                 </Grid.ContextFlyout>
@@ -73,7 +74,14 @@
                                    Sorting="DataGrid_Sorting"
                                    CanUserSortColumns="True"
                                    IsReadOnly="True"
-                                   SelectionMode="Single"
+                                   SelectionMode="Extended"
+                                   DoubleTapped="DataGrid_DoubleTapped"
+                                   SelectionChanged="DataGrid_SelectionChanged"
+                                   LoadingRow="DataGrid_LoadingRow"
+                                   UnloadingRow="DataGrid_UnloadingRow"
+                                   AllowDrop="True"
+                                   DragOver="DataGrid_DragOver"
+                                   Drop="DataGrid_Drop"
                                    GridLinesVisibility="None"
                                    RowHeight="32">
                     <controls:DataGrid.RowStyle>
@@ -81,8 +89,11 @@
                             <Setter Property="ContextFlyout">
                                 <Setter.Value>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="名前の変更" Command="{Binding ElementName=PaneControl, Path=ViewModel.RenameCommand}" CommandParameter="{Binding}" />
-                                        <MenuFlyoutItem Text="削除" Command="{Binding ElementName=PaneControl, Path=ViewModel.DeleteCommand}" CommandParameter="{Binding}" />
+                                        <MenuFlyoutItem Text="コピー" Command="{Binding ElementName=PaneControl, Path=ViewModel.CopyFilesCommand}" />
+                                        <MenuFlyoutItem Text="切り取り" Command="{Binding ElementName=PaneControl, Path=ViewModel.CutFilesCommand}" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="名前の変更" Command="{Binding ElementName=PaneControl, Path=ViewModel.RenameCommand}" />
+                                        <MenuFlyoutItem Text="削除" Command="{Binding ElementName=PaneControl, Path=ViewModel.DeleteCommand}" />
                                     </MenuFlyout>
                                 </Setter.Value>
                             </Setter>

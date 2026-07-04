@@ -10,6 +10,9 @@ public interface IFileService
     Task<bool> CreateFolderAsync(string parentPath, string folderName);
     Task<bool> DeleteToRecycleBinAsync(string path);
     Task<bool> RenameAsync(string oldPath, string newName);
+    Task OpenFileAsync(string path);
+    Task<bool> CopyFilesAsync(IEnumerable<string> sourcePaths, string destinationPath);
+    Task<bool> MoveFilesAsync(IEnumerable<string> sourcePaths, string destinationPath);
 
     event System.EventHandler<string> DirectoryChanged;
     void StartWatch(string path);
