@@ -135,4 +135,34 @@ public sealed partial class FilePaneControl : UserControl
             }
         }
     }
+
+    private void ColumnMenu_Opening(object sender, object e)
+    {
+        if (sender is MenuFlyout flyout)
+        {
+            foreach (var item in flyout.Items)
+            {
+                if (item is ToggleMenuFlyoutItem toggleItem && toggleItem.Tag is string tag)
+                {
+                    var column = FileListGrid.Columns.FirstOrDefault(c => c.Tag?.ToString() == tag);
+                    if (column != null)
+                    {
+                        toggleItem.IsChecked = column.Visibility == Microsoft.UI.Xaml.Visibility.Visible;
+                    }
+                }
+            }
+        }
+    }
+
+    private void ColumnMenuItem_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is ToggleMenuFlyoutItem toggleItem && toggleItem.Tag is string tag)
+        {
+            var column = FileListGrid.Columns.FirstOrDefault(c => c.Tag?.ToString() == tag);
+            if (column != null)
+            {
+                column.Visibility = toggleItem.IsChecked ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+            }
+        }
+    }
 }

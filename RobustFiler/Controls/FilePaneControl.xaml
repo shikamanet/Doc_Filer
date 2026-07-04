@@ -8,6 +8,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:viewmodels="using:RobustFiler.ViewModels"
     xmlns:controls="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:primitives="using:CommunityToolkit.WinUI.UI.Controls.Primitives"
     xmlns:sizers="using:CommunityToolkit.WinUI.Controls"
     xmlns:converters="using:RobustFiler.Converters"
     mc:Ignorable="d">
@@ -75,7 +76,8 @@
                     </MenuFlyout>
                 </Grid.ContextFlyout>
 
-                <controls:DataGrid ItemsSource="{x:Bind ViewModel.CurrentFolderItems, Mode=OneWay}" 
+                <controls:DataGrid x:Name="FileListGrid"
+                                   ItemsSource="{x:Bind ViewModel.CurrentFolderItems, Mode=OneWay}" 
                                    AutoGenerateColumns="False" 
                                    Sorting="DataGrid_Sorting"
                                    CanUserSortColumns="True"
@@ -90,6 +92,19 @@
                                    Drop="DataGrid_Drop"
                                    GridLinesVisibility="None"
                                    RowHeight="32">
+                    <controls:DataGrid.ColumnHeaderStyle>
+                        <Style TargetType="primitives:DataGridColumnHeader">
+                            <Setter Property="ContextFlyout">
+                                <Setter.Value>
+                                    <MenuFlyout Opening="ColumnMenu_Opening">
+                                        <ToggleMenuFlyoutItem Text="名前" Tag="Name" Click="ColumnMenuItem_Click" />
+                                        <ToggleMenuFlyoutItem Text="更新日時" Tag="DateModified" Click="ColumnMenuItem_Click" />
+                                        <ToggleMenuFlyoutItem Text="サイズ" Tag="Size" Click="ColumnMenuItem_Click" />
+                                    </MenuFlyout>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </controls:DataGrid.ColumnHeaderStyle>
                     <controls:DataGrid.RowStyle>
                         <Style TargetType="controls:DataGridRow">
                             <Setter Property="ContextFlyout">
