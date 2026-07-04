@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<UserControl
+    x:Class="RobustFiler.Controls.FilePaneControl"
+    x:Name="PaneControl"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:viewmodels="using:RobustFiler.ViewModels"
+    xmlns:controls="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:sizers="using:CommunityToolkit.WinUI.Controls"
+    xmlns:converters="using:RobustFiler.Converters"
+    mc:Ignorable="d">
+
+    <UserControl.Resources>
+        <converters:FileSizeConverter x:Key="FileSizeConverter" />
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Address Bar Area -->
+        <Grid Grid.Row="0" Padding="8" Background="{ThemeResource SystemControlBackgroundChromeMediumBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0" FontFamily="Segoe Fluent Icons" Content="&#xE72B;" Command="{x:Bind ViewModel.GoBackCommand}" ToolTipService.ToolTip="戻る" Margin="0,0,4,0"/>
+            <Button Grid.Column="1" FontFamily="Segoe Fluent Icons" Content="&#xE72A;" Command="{x:Bind ViewModel.GoForwardCommand}" ToolTipService.ToolTip="進む" Margin="0,0,8,0"/>
+            <TextBox x:Name="AddressBar" Grid.Column="2" Text="{x:Bind ViewModel.CurrentPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" KeyDown="AddressBar_KeyDown" VerticalAlignment="Center" />
+            <Button Grid.Column="3" FontFamily="Segoe Fluent Icons" Content="&#xE8A4;" Command="{x:Bind ViewModel.NavigateCommand}" CommandParameter="{x:Bind AddressBar.Text, Mode=OneWay}" ToolTipService.ToolTip="移動" Margin="8,0,0,0"/>
+        </Grid>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200" MinWidth="150" MaxWidth="400"/>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <TreeView Grid.Column="0" ItemsSource="{x:Bind ViewModel.RootDrives, Mode=OneWay}"
+                      ItemInvoked="TreeView_ItemInvoked">
+                <TreeView.ItemTemplate>
+                    <DataTemplate x:DataType="viewmodels:FileNodeViewModel">
+                        <TreeViewItem ItemsSource="{x:Bind Children, Mode=OneWay}"
+                                      IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Image Source="{x:Bind FileIcon, Mode=OneWay}" Width="16" Height="16" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </TreeViewItem>
+                    </DataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+
+            <sizers:GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent" />
+
+            <Grid Grid.Column="2" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                <Grid.ContextFlyout>
+                    <MenuFlyout>
+                        <MenuFlyoutItem Text="新しいフォルダー" Command="{x:Bind ViewModel.CreateFolderCommand}" />
+                    </MenuFlyout>
+                </Grid.ContextFlyout>
+
+                <controls:DataGrid ItemsSource="{x:Bind ViewModel.CurrentFolderItems, Mode=OneWay}" 
+                                   AutoGenerateColumns="False" 
+                                   Sorting="DataGrid_Sorting"
+                                   CanUserSortColumns="True"
+                                   IsReadOnly="True"
+                                   SelectionMode="Single"
+                                   GridLinesVisibility="None"
+                                   RowHeight="32">
+                    <controls:DataGrid.RowStyle>
+                        <Style TargetType="controls:DataGridRow">
+                            <Setter Property="ContextFlyout">
+                                <Setter.Value>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="名前の変更" Command="{Binding ElementName=PaneControl, Path=ViewModel.RenameCommand}" CommandParameter="{Binding}" />
+                                        <MenuFlyoutItem Text="削除" Command="{Binding ElementName=PaneControl, Path=ViewModel.DeleteCommand}" CommandParameter="{Binding}" />
+                                    </MenuFlyout>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </controls:DataGrid.RowStyle>
+
+                    <controls:DataGrid.Columns>
+                        <controls:DataGridTemplateColumn Header="名前" Tag="Name">
+                            <controls:DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="viewmodels:FileNodeViewModel">
+                                    <StackPanel Orientation="Horizontal" Spacing="12" Padding="4" Background="Transparent">
+                                        <Image Source="{x:Bind FileIcon, Mode=OneWay}" Width="16" Height="16" VerticalAlignment="Center" />
+                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </DataTemplate>
+                            </controls:DataGridTemplateColumn.CellTemplate>
+                        </controls:DataGridTemplateColumn>
+                        <controls:DataGridTextColumn Header="更新日時" Tag="DateModified" Binding="{Binding DateModified}" />
+                        <controls:DataGridTextColumn Header="サイズ" Tag="Size" Binding="{Binding RawSize, Converter={StaticResource FileSizeConverter}}" />
+                    </controls:DataGrid.Columns>
+                </controls:DataGrid>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

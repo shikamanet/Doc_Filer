@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "RobustFiler (Unpackaged)": {
+      "commandName": "Project"
+    },
+    "RobustFiler (Package)": {
+      "commandName": "MsixPackage"
+    }
+  }
+}
