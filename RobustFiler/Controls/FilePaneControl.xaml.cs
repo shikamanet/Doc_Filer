@@ -27,11 +27,20 @@ public sealed partial class FilePaneControl : UserControl
         }
     }
 
-    private void ViewModel_NodeSelectedRequest(object? sender, FileNodeViewModel node)
+    private async void ViewModel_NodeSelectedRequest(object? sender, FileNodeViewModel node)
     {
         if (FolderTree != null)
         {
             FolderTree.SelectedItem = node;
+
+            // UIがツリーの展開とノードの生成を完了するまで少し待機する
+            await System.Threading.Tasks.Task.Delay(100);
+
+            var container = FolderTree.ContainerFromItem(node) as Microsoft.UI.Xaml.UIElement;
+            if (container != null)
+            {
+                container.StartBringIntoView(new Microsoft.UI.Xaml.BringIntoViewOptions() { AnimationDesired = true });
+            }
         }
     }
 
