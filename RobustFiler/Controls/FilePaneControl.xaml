@@ -59,7 +59,8 @@
             </Grid.ColumnDefinitions>
 
             <TreeView x:Name="FolderTree" Grid.Column="0" ItemsSource="{x:Bind ViewModel.RootDrives, Mode=OneWay}"
-                      ItemInvoked="TreeView_ItemInvoked">
+                      ItemInvoked="TreeView_ItemInvoked"
+                      DoubleTapped="FolderTree_DoubleTapped">
                 <TreeView.ItemContainerStyle>
                     <Style TargetType="TreeViewItem">
                         <Setter Property="MinHeight" Value="24" />

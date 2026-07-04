@@ -11,6 +11,7 @@ public interface IFileService
     Task<bool> DeleteToRecycleBinAsync(string path);
     Task<bool> RenameAsync(string oldPath, string newName);
     Task OpenFileAsync(string path, string arguments = "");
+    string ResolveShortcut(string shortcutPath);
     Task<bool> CopyFilesAsync(IEnumerable<string> sourcePaths, string destinationPath);
     Task<bool> MoveFilesAsync(IEnumerable<string> sourcePaths, string destinationPath);
 

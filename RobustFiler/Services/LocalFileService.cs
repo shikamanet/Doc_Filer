@@ -176,26 +176,71 @@ public class LocalFileService : IFileService
 
     public async Task OpenFileAsync(string path, string arguments = "")
     {
-        await Task.Run(() =>
+        try
         {
-            try
+            if (string.IsNullOrEmpty(arguments))
             {
-                var startInfo = new System.Diagnostics.ProcessStartInfo
+                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+                var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(System.IO.Path.GetDirectoryName(path));
+                var options = new Windows.System.LauncherOptions
                 {
-                    FileName = path,
-                    UseShellExecute = true
+                    NeighboringFilesQuery = folder.CreateFileQuery()
                 };
-                if (!string.IsNullOrEmpty(arguments))
-                {
-                    startInfo.Arguments = arguments;
-                }
-                System.Diagnostics.Process.Start(startInfo);
+                await Windows.System.Launcher.LaunchFileAsync(file, options);
             }
-            catch
+            else
             {
-                // Ignore error if canceled
+                await Task.Run(() =>
+                {
+                    var startInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = path,
+                        UseShellExecute = true,
+                        Arguments = arguments,
+                        WorkingDirectory = System.IO.Path.GetDirectoryName(path) ?? string.Empty
+                    };
+                    System.Diagnostics.Process.Start(startInfo);
+                });
             }
-        });
+        }
+        catch
+        {
+            // Fallback if Launcher fails (e.g., unsupported file type or access denied)
+            await Task.Run(() =>
+            {
+                try
+                {
+                    var startInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = path,
+                        UseShellExecute = true
+                    };
+                    if (!string.IsNullOrEmpty(arguments))
+                    {
+                        startInfo.Arguments = arguments;
+                    }
+                    startInfo.WorkingDirectory = System.IO.Path.GetDirectoryName(path) ?? string.Empty;
+                    System.Diagnostics.Process.Start(startInfo);
+                }
+                catch { }
+            });
+        }
+    }
+
+    public string ResolveShortcut(string shortcutPath)
+    {
+        try
+        {
+            Type? t = Type.GetTypeFromProgID("WScript.Shell");
+            if (t != null)
+            {
+                dynamic shell = Activator.CreateInstance(t)!;
+                var shortcut = shell.CreateShortcut(shortcutPath);
+                return shortcut.TargetPath;
+            }
+        }
+        catch { }
+        return string.Empty;
     }
 
     public async Task<bool> CopyFilesAsync(IEnumerable<string> sourcePaths, string destinationPath)

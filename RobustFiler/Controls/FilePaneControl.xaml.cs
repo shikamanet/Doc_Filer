@@ -51,10 +51,21 @@ public sealed partial class FilePaneControl : UserControl
 
     private void TreeView_ItemInvoked(Microsoft.UI.Xaml.Controls.TreeView sender, Microsoft.UI.Xaml.Controls.TreeViewItemInvokedEventArgs args)
     {
-        if (args.InvokedItem is FileNodeViewModel node && node.IsDirectory)
+        if (args.InvokedItem is FileNodeViewModel node)
         {
-            node.IsExpanded = !node.IsExpanded;
-            _ = ViewModel.NavigateCommand.ExecuteAsync(node.FullPath);
+            if (node.IsDirectory)
+            {
+                node.IsExpanded = !node.IsExpanded;
+                _ = ViewModel.NavigateCommand.ExecuteAsync(node.FullPath);
+            }
+        }
+    }
+
+    private void FolderTree_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+    {
+        if (FolderTree.SelectedItem is FileNodeViewModel node && !node.IsDirectory)
+        {
+            _ = ViewModel.OpenNodeAsync(node);
         }
     }
 

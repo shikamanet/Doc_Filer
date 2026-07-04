@@ -32,7 +32,10 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     private string _currentPath = string.Empty;
 
     public ObservableCollection<FileNodeViewModel> RootDrives { get; } = new();
-    public ObservableCollection<FileNodeViewModel> CurrentFolderItems { get; } = new();
+    
+    [ObservableProperty]
+    private ObservableCollection<FileNodeViewModel> _currentFolderItems = new();
+    
     public ObservableCollection<FileNodeViewModel> SelectedItems { get; } = new();
     public ObservableCollection<BreadcrumbItem> BreadcrumbItems { get; } = new();
 
@@ -229,11 +232,12 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             dispatcherQueue.TryEnqueue(() =>
             {
                 SelectedItems.Clear();
-                CurrentFolderItems.Clear();
+                var newItems = new ObservableCollection<FileNodeViewModel>();
                 foreach (var item in items)
                 {
-                    CurrentFolderItems.Add(new FileNodeViewModel(item, _fileService));
+                    newItems.Add(new FileNodeViewModel(item, _fileService));
                 }
+                CurrentFolderItems = newItems;
             });
         }
     }
@@ -245,6 +249,25 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         if (node.IsDirectory)
         {
             await NavigateAsync(node.FullPath);
+        }
+        else if (node.FullPath.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            var target = _fileService.ResolveShortcut(node.FullPath);
+            if (!string.IsNullOrEmpty(target))
+            {
+                if (Directory.Exists(target))
+                {
+                    await NavigateAsync(target);
+                }
+                else
+                {
+                    await _fileService.OpenFileAsync(target);
+                }
+            }
+            else
+            {
+                await _fileService.OpenFileAsync(node.FullPath);
+            }
         }
         else
         {
@@ -382,18 +405,19 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
                 sorted = ascending ? sorted.OrderBy(x => x.IsDirectory ? 0 : 1).ThenBy(x => x.Name).ToList() : sorted.OrderBy(x => x.IsDirectory ? 0 : 1).ThenByDescending(x => x.Name).ToList();
                 break;
             case "DateModified":
-                sorted = ascending ? sorted.OrderBy(x => x.RawDateModified).ToList() : sorted.OrderByDescending(x => x.RawDateModified).ToList();
+                sorted = ascending ? sorted.OrderBy(x => x.IsDirectory ? 0 : 1).ThenBy(x => x.RawDateModified).ToList() : sorted.OrderBy(x => x.IsDirectory ? 0 : 1).ThenByDescending(x => x.RawDateModified).ToList();
                 break;
             case "Size":
-                sorted = ascending ? sorted.OrderBy(x => x.RawSize).ToList() : sorted.OrderByDescending(x => x.RawSize).ToList();
+                sorted = ascending ? sorted.OrderBy(x => x.IsDirectory ? 0 : 1).ThenBy(x => x.RawSize).ToList() : sorted.OrderBy(x => x.IsDirectory ? 0 : 1).ThenByDescending(x => x.RawSize).ToList();
                 break;
         }
 
-        CurrentFolderItems.Clear();
+        var newItems = new ObservableCollection<FileNodeViewModel>();
         foreach (var item in sorted)
         {
-            CurrentFolderItems.Add(item);
+            newItems.Add(item);
         }
+        CurrentFolderItems = newItems;
     }
 
     public void Dispose()
