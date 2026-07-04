@@ -32,7 +32,13 @@
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" FontFamily="Segoe Fluent Icons" Content="&#xE72B;" Command="{x:Bind ViewModel.GoBackCommand}" ToolTipService.ToolTip="戻る" Margin="0,0,4,0"/>
             <Button Grid.Column="1" FontFamily="Segoe Fluent Icons" Content="&#xE72A;" Command="{x:Bind ViewModel.GoForwardCommand}" ToolTipService.ToolTip="進む" Margin="0,0,8,0"/>
-            <BreadcrumbBar Grid.Column="2" ItemsSource="{x:Bind ViewModel.BreadcrumbItems, Mode=OneWay}" ItemClicked="BreadcrumbBar_ItemClicked" VerticalAlignment="Center" Margin="4"/>
+            <BreadcrumbBar Grid.Column="2" ItemsSource="{x:Bind ViewModel.BreadcrumbItems, Mode=OneWay}" ItemClicked="BreadcrumbBar_ItemClicked" VerticalAlignment="Center" Margin="4">
+                <BreadcrumbBar.ItemTemplate>
+                    <DataTemplate x:DataType="viewmodels:BreadcrumbItem">
+                        <TextBlock Text="{x:Bind Name}" />
+                    </DataTemplate>
+                </BreadcrumbBar.ItemTemplate>
+            </BreadcrumbBar>
         </Grid>
 
         <!-- Main Content Area -->
