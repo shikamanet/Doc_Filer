@@ -166,6 +166,8 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
 
     private async Task<FileNodeViewModel?> FindAndExpandNodeAsync(IEnumerable<FileNodeViewModel> nodes, string targetPath)
     {
+        string targetNormalized = targetPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
         foreach (var node in nodes)
         {
             if (string.Equals(node.FullPath, targetPath, StringComparison.OrdinalIgnoreCase))
@@ -173,18 +175,16 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
                 return node;
             }
 
-            if (targetPath.StartsWith(node.FullPath, StringComparison.OrdinalIgnoreCase) && node.IsDirectory)
+            string nodeNormalized = node.FullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+            if (targetNormalized.StartsWith(nodeNormalized, StringComparison.OrdinalIgnoreCase) && node.IsDirectory)
             {
                 if (!node.IsLoaded)
                 {
                     await node.LoadChildrenAsync();
                 }
                 
-                var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
-                dispatcherQueue?.TryEnqueue(() =>
-                {
-                    node.IsExpanded = true;
-                });
+                node.IsExpanded = true;
                 
                 return await FindAndExpandNodeAsync(node.Children, targetPath);
             }

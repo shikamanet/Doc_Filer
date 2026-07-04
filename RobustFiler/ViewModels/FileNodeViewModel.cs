@@ -99,15 +99,12 @@ public partial class FileNodeViewModel : ObservableObject
         var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         if (dispatcherQueue != null)
         {
-            dispatcherQueue.TryEnqueue(() =>
+            Children.Clear();
+            foreach (var item in items)
             {
-                Children.Clear();
-                foreach (var item in items)
-                {
-                    Children.Add(new FileNodeViewModel(item, _fileService));
-                }
-                IsLoaded = true;
-            });
+                Children.Add(new FileNodeViewModel(item, _fileService));
+            }
+            IsLoaded = true;
         }
     }
 }
