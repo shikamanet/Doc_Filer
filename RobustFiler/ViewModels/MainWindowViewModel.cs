@@ -40,6 +40,20 @@ public partial class MainWindowViewModel : ObservableObject
             _ = SaveSessionAsync();
         });
 
+        WeakReferenceMessenger.Default.Register<OpenNewTabMessage>(this, (r, m) =>
+        {
+            var dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
+            dispatcherQueue?.TryEnqueue(() =>
+            {
+                var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
+                _ = primaryPane.NavigateAsync(m.Path);
+                var tab = new TabItemViewModel(primaryPane);
+                Tabs.Add(tab);
+                SelectedTab = tab;
+                _ = SaveSessionAsync();
+            });
+        });
+
         _ = LoadFavoritesAsync();
         _ = LoadSessionAsync();
     }
@@ -99,7 +113,7 @@ public partial class MainWindowViewModel : ObservableObject
                     _ = primaryPane.NavigateAsync(tabState.PrimaryPath);
                 }
 
-                var tab = new TabItemViewModel(primaryPane) { Header = tabState.Header };
+                var tab = new TabItemViewModel(primaryPane) { Header = tabState.Header, IsLocked = tabState.IsLocked };
                 
                 if (tabState.IsDualPane)
                 {
@@ -139,7 +153,8 @@ public partial class MainWindowViewModel : ObservableObject
                 Header = t.Header,
                 IsDualPane = t.IsDualPane,
                 PrimaryPath = t.PrimaryPane.CurrentPath,
-                SecondaryPath = t.SecondaryPane?.CurrentPath ?? string.Empty
+                SecondaryPath = t.SecondaryPane?.CurrentPath ?? string.Empty,
+                IsLocked = t.IsLocked
             }).ToList()
         };
         await _fileService.SaveSessionAsync(session);
@@ -149,7 +164,18 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (value != null && SelectedTab?.PrimaryPane != null)
         {
-            _ = SelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true);
+            if (System.IO.Directory.Exists(value.Path))
+            {
+                _ = SelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true);
+            }
+            else if (System.IO.File.Exists(value.Path))
+            {
+                _ = _fileService.OpenFileAsync(value.Path);
+            }
+            else
+            {
+                _ = _dialogService.ShowErrorAsync("エラー", new System.Exception("指定されたパスが見つかりません。移動または削除された可能性があります。"));
+            }
             
             // Reset selection so the user can click it again
             SelectedFavorite = null; 
@@ -169,7 +195,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     public void CloseTab(TabItemViewModel? tab)
     {
-        if (tab != null && Tabs.Contains(tab))
+        if (tab != null && Tabs.Contains(tab) && !tab.IsLocked)
         {
             Tabs.Remove(tab);
             tab.Dispose();
@@ -179,6 +205,52 @@ public partial class MainWindowViewModel : ObservableObject
             }
             _ = SaveSessionAsync();
         }
+    }
+
+    [RelayCommand]
+    public void CloseOtherTabs(TabItemViewModel? tab)
+    {
+        if (tab == null) return;
+        var tabsToRemove = Tabs.Where(t => t != tab && !t.IsLocked).ToList();
+        foreach (var t in tabsToRemove)
+        {
+            Tabs.Remove(t);
+            t.Dispose();
+        }
+        _ = SaveSessionAsync();
+    }
+
+    [RelayCommand]
+    public void CloseTabsToRight(TabItemViewModel? tab)
+    {
+        if (tab == null) return;
+        int index = Tabs.IndexOf(tab);
+        if (index >= 0)
+        {
+            var tabsToRemove = Tabs.Skip(index + 1).Where(t => !t.IsLocked).ToList();
+            foreach (var t in tabsToRemove)
+            {
+                Tabs.Remove(t);
+                t.Dispose();
+            }
+            _ = SaveSessionAsync();
+        }
+    }
+
+    [RelayCommand]
+    public void CloseAllTabs()
+    {
+        var tabsToRemove = Tabs.Where(t => !t.IsLocked).ToList();
+        foreach (var t in tabsToRemove)
+        {
+            Tabs.Remove(t);
+            t.Dispose();
+        }
+        if (Tabs.Count == 0)
+        {
+            AddTab();
+        }
+        _ = SaveSessionAsync();
     }
 
     [RelayCommand]

@@ -114,9 +114,12 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         await NavigateInternalAsync(path, false, bringToTop);
     }
 
+    public Func<string, bool>? NavigationInterceptor { get; set; }
+
     private async Task NavigateInternalAsync(string path, bool isHistoryNavigation, bool bringToTop = false)
     {
         if (_isNavigating) return;
+        if (NavigationInterceptor?.Invoke(path) == true) return;
         _isNavigating = true;
 
         try

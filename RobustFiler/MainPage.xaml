@@ -75,7 +75,25 @@
                      IsAddTabButtonVisible="True">
                 <TabView.TabItemTemplate>
                     <DataTemplate x:DataType="viewmodels:TabItemViewModel">
-                        <TabViewItem Header="{x:Bind Header, Mode=OneWay}">
+                        <TabViewItem IsClosable="{x:Bind IsClosable, Mode=OneWay}" DoubleTapped="TabViewItem_DoubleTapped">
+                            <TabViewItem.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="閉じる" KeyboardAcceleratorTextOverride="Ctrl+F4"
+                                                    Click="CloseTabMenuItem_Click" />
+                                    <MenuFlyoutItem Text="その他を閉じる" 
+                                                    Click="CloseOtherTabsMenuItem_Click" />
+                                    <MenuFlyoutItem Text="右側を閉じる" 
+                                                    Click="CloseTabsToRightMenuItem_Click" />
+                                    <MenuFlyoutItem Text="すべて閉じる" KeyboardAcceleratorTextOverride="Ctrl+K W"
+                                                    Click="CloseAllTabsMenuItem_Click" />
+                                </MenuFlyout>
+                            </TabViewItem.ContextFlyout>
+                            <TabViewItem.Header>
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{x:Bind Header, Mode=OneWay}" VerticalAlignment="Center" />
+                                    <FontIcon Glyph="&#xE72E;" Visibility="{x:Bind IsLocked, Mode=OneWay, Converter={StaticResource TrueToVisibleConverter}}" FontSize="12" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </TabViewItem.Header>
                             <TabViewItem.Content>
                                 <Grid>
                                     <!-- Single Pane -->

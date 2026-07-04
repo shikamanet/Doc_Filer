@@ -89,14 +89,7 @@
 
             <sizers:GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="Transparent" />
 
-            <Grid Grid.Column="2" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-                <Grid.ContextFlyout>
-                    <MenuFlyout>
-                        <MenuFlyoutItem Text="貼り付け" Command="{x:Bind ViewModel.PasteFilesCommand}" />
-                        <MenuFlyoutSeparator />
-                        <MenuFlyoutItem Text="新しいフォルダー" Command="{x:Bind ViewModel.CreateFolderCommand}" />
-                    </MenuFlyout>
-                </Grid.ContextFlyout>
+            <Grid Grid.Column="2" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" RightTapped="Background_RightTapped">
 
                 <controls:DataGrid x:Name="FileListGrid"
                                    ItemsSource="{x:Bind ViewModel.CurrentFolderItems, Mode=OneWay}" 
@@ -106,6 +99,7 @@
                                    IsReadOnly="True"
                                    SelectionMode="Extended"
                                    DoubleTapped="DataGrid_DoubleTapped"
+                                   RightTapped="DataGrid_RightTapped"
                                    SelectionChanged="DataGrid_SelectionChanged"
                                    LoadingRow="DataGrid_LoadingRow"
                                    UnloadingRow="DataGrid_UnloadingRow"
@@ -129,19 +123,6 @@
                     </controls:DataGrid.ColumnHeaderStyle>
                     <controls:DataGrid.RowStyle>
                         <Style TargetType="controls:DataGridRow">
-                            <Setter Property="ContextFlyout">
-                                <Setter.Value>
-                                    <MenuFlyout>
-                                        <MenuFlyoutItem Text="コピー" Click="MenuFlyoutItem_Copy_Click" />
-                                        <MenuFlyoutItem Text="切り取り" Click="MenuFlyoutItem_Cut_Click" />
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="お気に入りに追加" Click="MenuFlyoutItem_AddFavorite_Click" />
-                                        <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="名前の変更" Click="MenuFlyoutItem_Rename_Click" />
-                                        <MenuFlyoutItem Text="削除" Click="MenuFlyoutItem_Delete_Click" />
-                                    </MenuFlyout>
-                                </Setter.Value>
-                            </Setter>
                         </Style>
                     </controls:DataGrid.RowStyle>
 

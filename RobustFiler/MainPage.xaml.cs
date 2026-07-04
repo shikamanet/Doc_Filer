@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using RobustFiler.ViewModels;
@@ -25,5 +26,43 @@ public sealed partial class MainPage : Page
         {
             ViewModel.CloseTabCommand.Execute(tab);
         }
+    }
+
+    private void TabViewItem_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is TabItemViewModel tab)
+        {
+            tab.IsLocked = !tab.IsLocked;
+            e.Handled = true;
+        }
+    }
+
+    private void CloseTabMenuItem_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is TabItemViewModel tab)
+        {
+            ViewModel.CloseTabCommand.Execute(tab);
+        }
+    }
+
+    private void CloseOtherTabsMenuItem_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is TabItemViewModel tab)
+        {
+            ViewModel.CloseOtherTabsCommand.Execute(tab);
+        }
+    }
+
+    private void CloseTabsToRightMenuItem_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is TabItemViewModel tab)
+        {
+            ViewModel.CloseTabsToRightCommand.Execute(tab);
+        }
+    }
+
+    private void CloseAllTabsMenuItem_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        ViewModel.CloseAllTabsCommand.Execute(null);
     }
 }

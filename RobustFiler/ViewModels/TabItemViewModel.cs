@@ -1,5 +1,6 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
 
 namespace RobustFiler.ViewModels;
 
@@ -16,11 +17,28 @@ public partial class TabItemViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _header = "新しいタブ";
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsClosable))]
+    private bool _isLocked;
+
+    public bool IsClosable => !IsLocked;
+
     public TabItemViewModel(FilePaneViewModel primaryPane)
     {
         PrimaryPane = primaryPane;
         PrimaryPane.PropertyChanged += PrimaryPane_PropertyChanged;
+        PrimaryPane.NavigationInterceptor = OnPaneNavigating;
         UpdateHeader();
+    }
+
+    private bool OnPaneNavigating(string targetPath)
+    {
+        if (IsLocked)
+        {
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.OpenNewTabMessage(targetPath));
+            return true;
+        }
+        return false;
     }
 
     private void PrimaryPane_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -61,6 +79,7 @@ public partial class TabItemViewModel : ObservableObject, IDisposable
             SecondaryPane = newSecondaryPane;
             if (SecondaryPane != null)
             {
+                SecondaryPane.NavigationInterceptor = OnPaneNavigating;
                 _ = SecondaryPane.NavigateAsync(PrimaryPane.CurrentPath);
             }
             IsDualPane = true;

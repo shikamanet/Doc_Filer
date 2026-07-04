@@ -53,6 +53,7 @@ public sealed partial class FilePaneControl : UserControl
     {
         if (args.InvokedItem is FileNodeViewModel node && node.IsDirectory)
         {
+            node.IsExpanded = !node.IsExpanded;
             _ = ViewModel.NavigateCommand.ExecuteAsync(node.FullPath);
         }
     }
@@ -148,7 +149,7 @@ public sealed partial class FilePaneControl : UserControl
     {
         if (sender is CommunityToolkit.WinUI.UI.Controls.DataGrid dataGrid && dataGrid.SelectedItem is FileNodeViewModel node)
         {
-            _ = ViewModel.NavigateToPathAsync(node.FullPath, bringToTop: true);
+            _ = ViewModel.OpenNodeAsync(node);
         }
     }
 
@@ -292,14 +293,20 @@ public sealed partial class FilePaneControl : UserControl
         }
     }
 
-    private void MenuFlyoutItem_Copy_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    private void Background_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
     {
-        ViewModel.CopyFilesCommand.Execute(null);
-    }
+        // DataGrid上の右クリックはDataGrid_RightTappedで処理するため、ここではスキップ
+        var fe = e.OriginalSource as Microsoft.UI.Xaml.FrameworkElement;
+        var parent = fe;
+        while (parent != null)
+        {
+            if (parent is CommunityToolkit.WinUI.UI.Controls.DataGrid)
+                return; // DataGrid内のイベントは無視（DataGrid_RightTappedで処理済み）
+            parent = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(parent) as Microsoft.UI.Xaml.FrameworkElement;
+        }
 
-    private void MenuFlyoutItem_Cut_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
-    {
-        ViewModel.CutFilesCommand.Execute(null);
+        e.Handled = true;
+        ShowShellContextMenu(new[] { ViewModel.CurrentPath });
     }
 
     private void MenuFlyoutItem_AddFavorite_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
@@ -314,13 +321,104 @@ public sealed partial class FilePaneControl : UserControl
         }
     }
 
-    private void MenuFlyoutItem_Rename_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    private void DataGrid_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
     {
-        ViewModel.RenameCommand.Execute(null);
+        e.Handled = true;
+        
+        var fe = e.OriginalSource as Microsoft.UI.Xaml.FrameworkElement;
+        var row = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(fe);
+        while (row != null && !(row is CommunityToolkit.WinUI.UI.Controls.DataGridRow))
+        {
+            row = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(row);
+        }
+
+        if (row is CommunityToolkit.WinUI.UI.Controls.DataGridRow gridRow && gridRow.DataContext is FileNodeViewModel node)
+        {
+            if (!ViewModel.SelectedItems.Contains(node))
+            {
+                ViewModel.SelectedItems.Clear();
+                ViewModel.SelectedItems.Add(node);
+            }
+        }
+        else
+        {
+            // 行以外の場所（背景）での右クリック → フォルダのコンテキストメニュー
+            ShowShellContextMenu(new[] { ViewModel.CurrentPath });
+            return;
+        }
+
+        var paths = ViewModel.SelectedItems.Select(n => n.FullPath).ToArray();
+        ShowShellContextMenu(paths);
     }
 
-    private void MenuFlyoutItem_Delete_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    // コンテキストメニュー表示中フラグ（多重呼び出し防止）
+    private bool _isShowingContextMenu;
+
+    private void ShowShellContextMenu(string[] paths)
     {
-        ViewModel.DeleteCommand.Execute(null);
+        if (_isShowingContextMenu) return;
+        _isShowingContextMenu = true;
+
+        try
+        {
+            // マウスカーソル位置を先に取得（UIスレッドで取得する必要がある）
+            Vanara.PInvoke.User32.GetCursorPos(out var pt);
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.Current.MainWindow);
+
+            // 専用STAスレッドでShellContextMenuを実行する
+            // （WinUI3のASTAスレッドではCOM再入の問題でクラッシュしやすいため）
+            var thread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    var shellItems = new Vanara.Windows.Shell.ShellItem[paths.Length];
+                    try
+                    {
+                        for (int i = 0; i < paths.Length; i++)
+                        {
+                            shellItems[i] = new Vanara.Windows.Shell.ShellItem(paths[i]);
+                        }
+                        var contextMenu = Vanara.Windows.Shell.ShellContextMenu.CreateFromItems(shellItems, out var keepAlive);
+                        using (keepAlive)
+                        {
+                            contextMenu.ShowContextMenu(pt);
+                        }
+                    }
+                    finally
+                    {
+                        // ShellItemを確実に破棄する
+                        foreach (var item in shellItems)
+                        {
+                            item?.Dispose();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Context menu error: {ex.Message}");
+                }
+                finally
+                {
+                    // UIスレッドでフラグをリセット
+                    DispatcherQueue?.TryEnqueue(() =>
+                    {
+                        _isShowingContextMenu = false;
+                        // メニューから操作（削除、名前変更など）が行われた可能性があるので再読み込み
+                        if (ViewModel != null)
+                        {
+                            _ = ViewModel.NavigateAsync(ViewModel.CurrentPath);
+                        }
+                    });
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
+        }
+        catch (Exception ex)
+        {
+            _isShowingContextMenu = false;
+            System.Diagnostics.Debug.WriteLine($"Context menu setup error: {ex.Message}");
+        }
     }
 }
