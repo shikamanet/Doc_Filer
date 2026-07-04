@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.UI.Dispatching;
 using RobustFiler.Models;
 using RobustFiler.Services;
@@ -299,6 +300,21 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
                 await _dialogService.ShowErrorAsync("エラー", ex);
             }
         }
+    }
+
+    [RelayCommand]
+    public void AddToFavorites(FileNodeViewModel? node)
+    {
+        var targetNode = node ?? SelectedItems.FirstOrDefault();
+        if (targetNode == null) return;
+
+        var favorite = new FavoriteItem
+        {
+            Name = targetNode.Name,
+            Path = targetNode.FullPath
+        };
+        _ = favorite.LoadIconAsync();
+        CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.AddFavoriteMessage(favorite));
     }
 
     public void SortItems(string columnTag, bool ascending)

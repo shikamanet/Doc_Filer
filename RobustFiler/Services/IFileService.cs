@@ -14,6 +14,9 @@ public interface IFileService
     Task<bool> CopyFilesAsync(IEnumerable<string> sourcePaths, string destinationPath);
     Task<bool> MoveFilesAsync(IEnumerable<string> sourcePaths, string destinationPath);
 
+    Task<IEnumerable<FavoriteItem>> LoadFavoritesAsync();
+    Task SaveFavoritesAsync(IEnumerable<FavoriteItem> favorites);
+
     event System.EventHandler<string> DirectoryChanged;
     void StartWatch(string path);
     void StopWatch();

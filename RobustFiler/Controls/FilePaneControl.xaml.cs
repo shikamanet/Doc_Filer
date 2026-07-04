@@ -33,6 +33,60 @@ public sealed partial class FilePaneControl : UserControl
         }
     }
 
+    private void AddressBarBorder_Tapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e)
+    {
+        // パンくずリスト内のアイテム（フォルダ名）をクリックした場合はTextBoxに切り替えない
+        if (e.OriginalSource is Microsoft.UI.Xaml.FrameworkElement fe)
+        {
+            if (fe.DataContext is RobustFiler.ViewModels.BreadcrumbItem || fe is Microsoft.UI.Xaml.Controls.BreadcrumbBar)
+            {
+                return;
+            }
+            
+            // VisualTree を辿って BreadcrumbBarItem がクリックされたか確認する（安全のため）
+            var parent = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(fe);
+            while (parent != null)
+            {
+                if (parent is Microsoft.UI.Xaml.Controls.BreadcrumbBarItem)
+                {
+                    return;
+                }
+                parent = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(parent);
+            }
+        }
+
+        Breadcrumb.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+        AddressTextBox.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+        AddressTextBox.Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+        AddressTextBox.SelectAll();
+        e.Handled = true;
+    }
+
+    private void AddressTextBox_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Enter)
+        {
+            _ = ViewModel.NavigateCommand.ExecuteAsync(AddressTextBox.Text);
+            AddressTextBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+            Breadcrumb.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+            e.Handled = true;
+        }
+        else if (e.Key == Windows.System.VirtualKey.Escape)
+        {
+            AddressTextBox.Text = ViewModel.CurrentPath;
+            AddressTextBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+            Breadcrumb.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+            e.Handled = true;
+        }
+    }
+
+    private void AddressTextBox_LostFocus(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        AddressTextBox.Text = ViewModel.CurrentPath;
+        AddressTextBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
+        Breadcrumb.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
+    }
+
     private void DataGrid_Sorting(object sender, CommunityToolkit.WinUI.UI.Controls.DataGridColumnEventArgs e)
     {
         var tag = e.Column.Tag?.ToString();
@@ -82,11 +136,15 @@ public sealed partial class FilePaneControl : UserControl
     {
         e.Row.CanDrag = true;
         e.Row.DragStarting += DataGridRow_DragStarting;
+        e.Row.PointerEntered += DataGridRow_PointerEntered;
+        e.Row.PointerExited += DataGridRow_PointerExited;
     }
 
     private void DataGrid_UnloadingRow(object sender, CommunityToolkit.WinUI.UI.Controls.DataGridRowEventArgs e)
     {
         e.Row.DragStarting -= DataGridRow_DragStarting;
+        e.Row.PointerEntered -= DataGridRow_PointerEntered;
+        e.Row.PointerExited -= DataGridRow_PointerExited;
     }
 
     private void DataGridRow_DragStarting(Microsoft.UI.Xaml.UIElement sender, Microsoft.UI.Xaml.DragStartingEventArgs args)
@@ -163,6 +221,42 @@ public sealed partial class FilePaneControl : UserControl
             {
                 column.Visibility = toggleItem.IsChecked ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
             }
+        }
+    }
+
+    private void TreeItem_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is Microsoft.UI.Xaml.Controls.StackPanel panel)
+        {
+            panel.Background = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["SystemControlHighlightListLowBrush"];
+        }
+    }
+
+    private void TreeItem_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is Microsoft.UI.Xaml.Controls.StackPanel panel)
+        {
+            panel.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
+        }
+    }
+
+    private void DataGridRow_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is CommunityToolkit.WinUI.UI.Controls.DataGridRow row)
+        {
+            var grid = FileListGrid;
+            if (grid != null && !grid.SelectedItems.Contains(row.DataContext))
+            {
+                row.Background = (Microsoft.UI.Xaml.Media.Brush)Microsoft.UI.Xaml.Application.Current.Resources["SystemControlHighlightListLowBrush"];
+            }
+        }
+    }
+
+    private void DataGridRow_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        if (sender is CommunityToolkit.WinUI.UI.Controls.DataGridRow row)
+        {
+            row.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
         }
     }
 }

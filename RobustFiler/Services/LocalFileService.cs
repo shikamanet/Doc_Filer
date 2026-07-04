@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using System.Text.Json;
 using RobustFiler.Models;
 
 namespace RobustFiler.Services;
@@ -262,6 +263,42 @@ public class LocalFileService : IFileService
         {
             var newDestinationDir = Path.Combine(destinationDir, subDir.Name);
             CopyDirectory(subDir.FullName, newDestinationDir);
+        }
+    }
+
+    public async Task<IEnumerable<FavoriteItem>> LoadFavoritesAsync()
+    {
+        var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+        var filePath = Path.Combine(localFolder, "favorites.json");
+        if (!File.Exists(filePath))
+        {
+            return new List<FavoriteItem>();
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(filePath);
+            var favorites = JsonSerializer.Deserialize<List<FavoriteItem>>(json);
+            return favorites ?? new List<FavoriteItem>();
+        }
+        catch
+        {
+            return new List<FavoriteItem>();
+        }
+    }
+
+    public async Task SaveFavoritesAsync(IEnumerable<FavoriteItem> favorites)
+    {
+        try
+        {
+            var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
+            var filePath = Path.Combine(localFolder, "favorites.json");
+            var json = JsonSerializer.Serialize(favorites);
+            await File.WriteAllTextAsync(filePath, json);
+        }
+        catch
+        {
+            // Ignored
         }
     }
 }

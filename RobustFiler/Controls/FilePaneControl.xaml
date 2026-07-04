@@ -11,10 +11,12 @@
     xmlns:primitives="using:CommunityToolkit.WinUI.UI.Controls.Primitives"
     xmlns:sizers="using:CommunityToolkit.WinUI.Controls"
     xmlns:converters="using:RobustFiler.Converters"
-    mc:Ignorable="d">
+    mc:Ignorable="d"
+    FontSize="12">
 
     <UserControl.Resources>
         <converters:FileSizeConverter x:Key="FileSizeConverter" />
+        <x:Double x:Key="TreeViewItemMinHeight">24</x:Double>
     </UserControl.Resources>
 
     <Grid>
@@ -33,13 +35,19 @@
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0" FontFamily="Segoe Fluent Icons" Content="&#xE72B;" Command="{x:Bind ViewModel.GoBackCommand}" ToolTipService.ToolTip="戻る" Margin="0,0,4,0"/>
             <Button Grid.Column="1" FontFamily="Segoe Fluent Icons" Content="&#xE72A;" Command="{x:Bind ViewModel.GoForwardCommand}" ToolTipService.ToolTip="進む" Margin="0,0,8,0"/>
-            <BreadcrumbBar Grid.Column="2" ItemsSource="{x:Bind ViewModel.BreadcrumbItems, Mode=OneWay}" ItemClicked="BreadcrumbBar_ItemClicked" VerticalAlignment="Center" Margin="4">
-                <BreadcrumbBar.ItemTemplate>
-                    <DataTemplate x:DataType="viewmodels:BreadcrumbItem">
-                        <TextBlock Text="{x:Bind Name}" />
-                    </DataTemplate>
-                </BreadcrumbBar.ItemTemplate>
-            </BreadcrumbBar>
+            
+            <Border Grid.Column="2" x:Name="AddressBarBorder" Background="{ThemeResource ControlFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Tapped="AddressBarBorder_Tapped" VerticalAlignment="Stretch" MinHeight="32">
+                <Grid>
+                    <BreadcrumbBar x:Name="Breadcrumb" ItemsSource="{x:Bind ViewModel.BreadcrumbItems, Mode=OneWay}" ItemClicked="BreadcrumbBar_ItemClicked" VerticalAlignment="Center" Margin="4,0,4,0" Visibility="Visible">
+                        <BreadcrumbBar.ItemTemplate>
+                            <DataTemplate x:DataType="viewmodels:BreadcrumbItem">
+                                <TextBlock Text="{x:Bind Name}" />
+                            </DataTemplate>
+                        </BreadcrumbBar.ItemTemplate>
+                    </BreadcrumbBar>
+                    <TextBox x:Name="AddressTextBox" Text="{x:Bind ViewModel.CurrentPath, Mode=OneWay}" Visibility="Collapsed" KeyDown="AddressTextBox_KeyDown" LostFocus="AddressTextBox_LostFocus" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" BorderThickness="0" Background="Transparent" />
+                </Grid>
+            </Border>
         </Grid>
 
         <!-- Main Content Area -->
@@ -52,11 +60,25 @@
 
             <TreeView Grid.Column="0" ItemsSource="{x:Bind ViewModel.RootDrives, Mode=OneWay}"
                       ItemInvoked="TreeView_ItemInvoked">
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="TreeViewItem">
+                        <Setter Property="MinHeight" Value="24" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="ContextFlyout">
+                            <Setter.Value>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="お気に入りに追加" Command="{Binding ElementName=PaneControl, Path=ViewModel.AddToFavoritesCommand}" CommandParameter="{Binding}" />
+                                </MenuFlyout>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </TreeView.ItemContainerStyle>
                 <TreeView.ItemTemplate>
                     <DataTemplate x:DataType="viewmodels:FileNodeViewModel">
                         <TreeViewItem ItemsSource="{x:Bind Children, Mode=OneWay}"
                                       IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="4" Padding="4,0" Background="Transparent" CornerRadius="4"
+                                        PointerEntered="TreeItem_PointerEntered" PointerExited="TreeItem_PointerExited">
                                 <Image Source="{x:Bind FileIcon, Mode=OneWay}" Width="16" Height="16" VerticalAlignment="Center" />
                                 <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center" />
                             </StackPanel>
@@ -112,6 +134,8 @@
                                     <MenuFlyout>
                                         <MenuFlyoutItem Text="コピー" Command="{Binding ElementName=PaneControl, Path=ViewModel.CopyFilesCommand}" />
                                         <MenuFlyoutItem Text="切り取り" Command="{Binding ElementName=PaneControl, Path=ViewModel.CutFilesCommand}" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem Text="お気に入りに追加" Command="{Binding ElementName=PaneControl, Path=ViewModel.AddToFavoritesCommand}" CommandParameter="{Binding}" />
                                         <MenuFlyoutSeparator />
                                         <MenuFlyoutItem Text="名前の変更" Command="{Binding ElementName=PaneControl, Path=ViewModel.RenameCommand}" />
                                         <MenuFlyoutItem Text="削除" Command="{Binding ElementName=PaneControl, Path=ViewModel.DeleteCommand}" />
