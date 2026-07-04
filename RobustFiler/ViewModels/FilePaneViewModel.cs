@@ -85,7 +85,7 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         {
             _forwardHistory.Push(CurrentPath);
             var prev = _backHistory.Pop();
-            _ = NavigateInternalAsync(prev, isHistoryNavigation: true);
+            _ = NavigateInternalAsync(prev, NavigationSource.History, isHistoryNavigation: true);
         }
     }
 
@@ -98,7 +98,7 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         {
             _backHistory.Push(CurrentPath);
             var next = _forwardHistory.Pop();
-            _ = NavigateInternalAsync(next, isHistoryNavigation: true);
+            _ = NavigateInternalAsync(next, NavigationSource.History, isHistoryNavigation: true);
         }
     }
 
@@ -108,18 +108,23 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     public async Task NavigateAsync(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || CurrentPath == path) return;
-        await NavigateInternalAsync(path, false, false);
+        await NavigateInternalAsync(path, NavigationSource.Other, false, false);
     }
 
-    public async Task NavigateToPathAsync(string path, bool bringToTop)
+    public async Task NavigateToPathAsync(string path, bool bringToTop, NavigationSource source = NavigationSource.Other)
     {
-        if (string.IsNullOrWhiteSpace(path) || CurrentPath == path) return;
-        await NavigateInternalAsync(path, false, bringToTop);
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (CurrentPath == path)
+        {
+            ApplyNavigationSourceEffects(path, source, bringToTop);
+            return;
+        }
+        await NavigateInternalAsync(path, source, false, bringToTop);
     }
 
     public Func<string, bool>? NavigationInterceptor { get; set; }
 
-    private async Task NavigateInternalAsync(string path, bool isHistoryNavigation, bool bringToTop = false)
+    private async Task NavigateInternalAsync(string path, NavigationSource source, bool isHistoryNavigation, bool bringToTop = false)
     {
         if (_isNavigating) return;
         if (NavigationInterceptor?.Invoke(path) == true) return;
@@ -155,14 +160,40 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             GoForwardCommand.NotifyCanExecuteChanged();
             CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.SessionChangedMessage());
             
-            if (!isHistoryNavigation && Directory.Exists(path))
+            if (!isHistoryNavigation)
             {
-                _ = ExpandToPathAsync(path, bringToTop);
+                ApplyNavigationSourceEffects(path, source, bringToTop);
             }
         }
     }
 
-    private async Task ExpandToPathAsync(string targetPath, bool bringToTop)
+    private void ApplyNavigationSourceEffects(string path, NavigationSource source, bool bringToTop)
+    {
+        if (!Directory.Exists(path)) return;
+
+        if (source == NavigationSource.Favorite || source == NavigationSource.Breadcrumb || source == NavigationSource.TreeView)
+        {
+            RootDrives.Clear();
+            var item = new FileItem
+            {
+                Name = Path.GetFileName(path),
+                FullPath = path,
+                IsDirectory = true,
+                DateModified = DateTime.MinValue
+            };
+            if (string.IsNullOrEmpty(item.Name)) item.Name = path; // Handle drive roots like "C:\"
+            var rootNode = new FileNodeViewModel(item, _fileService);
+            rootNode.IsExpanded = true;
+            RootDrives.Add(rootNode);
+            _ = SelectNodeInTreeAsync(path, bringToTop);
+        }
+        else if (source == NavigationSource.DataGrid)
+        {
+            _ = SelectNodeInTreeAsync(path, bringToTop);
+        }
+    }
+
+    private async Task SelectNodeInTreeAsync(string targetPath, bool bringToTop)
     {
         var node = await FindAndExpandNodeAsync(RootDrives, targetPath);
         if (node != null)
@@ -243,12 +274,17 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public async Task OpenNodeAsync(FileNodeViewModel? node)
+    public Task OpenNodeAsync(FileNodeViewModel? node)
+    {
+        return OpenNodeWithSourceAsync(node, NavigationSource.Other);
+    }
+
+    public async Task OpenNodeWithSourceAsync(FileNodeViewModel? node, NavigationSource source)
     {
         if (node == null) return;
         if (node.IsDirectory)
         {
-            await NavigateAsync(node.FullPath);
+            await NavigateToPathAsync(node.FullPath, bringToTop: false, source: source);
         }
         else if (node.FullPath.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
         {
@@ -257,7 +293,7 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             {
                 if (Directory.Exists(target))
                 {
-                    await NavigateAsync(target);
+                    await NavigateToPathAsync(target, bringToTop: false, source: source);
                 }
                 else
                 {

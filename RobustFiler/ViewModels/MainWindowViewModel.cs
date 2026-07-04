@@ -326,7 +326,7 @@ public partial class MainWindowViewModel : ObservableObject
             }
             else if (System.IO.Directory.Exists(value.Path))
             {
-                _ = SelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true);
+                _ = SelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true, source: NavigationSource.Favorite);
             }
             else if (System.IO.File.Exists(value.Path))
             {

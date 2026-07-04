@@ -63,9 +63,9 @@ public sealed partial class FilePaneControl : UserControl
 
     private void FolderTree_DoubleTapped(object sender, Microsoft.UI.Xaml.Input.DoubleTappedRoutedEventArgs e)
     {
-        if (FolderTree.SelectedItem is FileNodeViewModel node && !node.IsDirectory)
+        if (FolderTree.SelectedItem is FileNodeViewModel node)
         {
-            _ = ViewModel.OpenNodeAsync(node);
+            _ = ViewModel.OpenNodeWithSourceAsync(node, NavigationSource.TreeView);
         }
     }
 
@@ -73,7 +73,7 @@ public sealed partial class FilePaneControl : UserControl
     {
         if (args.Item is BreadcrumbItem item)
         {
-            _ = ViewModel.NavigateToPathAsync(item.Path, bringToTop: true);
+            _ = ViewModel.NavigateToPathAsync(item.Path, bringToTop: true, source: NavigationSource.Breadcrumb);
         }
     }
 
@@ -110,7 +110,7 @@ public sealed partial class FilePaneControl : UserControl
     {
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
-            _ = ViewModel.NavigateToPathAsync(AddressTextBox.Text, bringToTop: true);
+            _ = ViewModel.NavigateToPathAsync(AddressTextBox.Text, bringToTop: true, source: NavigationSource.AddressBar);
             AddressTextBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
             Breadcrumb.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
             e.Handled = true;
@@ -160,7 +160,7 @@ public sealed partial class FilePaneControl : UserControl
     {
         if (sender is CommunityToolkit.WinUI.UI.Controls.DataGrid dataGrid && dataGrid.SelectedItem is FileNodeViewModel node)
         {
-            _ = ViewModel.OpenNodeAsync(node);
+            _ = ViewModel.OpenNodeWithSourceAsync(node, NavigationSource.DataGrid);
         }
     }
 
