@@ -21,6 +21,7 @@ public class BreadcrumbItem
 
 public partial class FilePaneViewModel : ObservableObject, IDisposable
 {
+    public event EventHandler<FileNodeViewModel>? NodeSelectedRequest;
     private readonly IFileService _fileService;
     private readonly IDialogService _dialogService;
     private readonly Stack<string> _backHistory = new();
@@ -141,7 +142,54 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             _isNavigating = false;
             GoBackCommand.NotifyCanExecuteChanged();
             GoForwardCommand.NotifyCanExecuteChanged();
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.SessionChangedMessage());
+            
+            if (!isHistoryNavigation && Directory.Exists(path))
+            {
+                _ = ExpandToPathAsync(path);
+            }
         }
+    }
+
+    private async Task ExpandToPathAsync(string targetPath)
+    {
+        var targetNode = await FindAndExpandNodeAsync(RootDrives, targetPath);
+        if (targetNode != null)
+        {
+            var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
+            dispatcherQueue?.TryEnqueue(() =>
+            {
+                NodeSelectedRequest?.Invoke(this, targetNode);
+            });
+        }
+    }
+
+    private async Task<FileNodeViewModel?> FindAndExpandNodeAsync(IEnumerable<FileNodeViewModel> nodes, string targetPath)
+    {
+        foreach (var node in nodes)
+        {
+            if (string.Equals(node.FullPath, targetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return node;
+            }
+
+            if (targetPath.StartsWith(node.FullPath, StringComparison.OrdinalIgnoreCase) && node.IsDirectory)
+            {
+                if (!node.IsLoaded)
+                {
+                    await node.LoadChildrenAsync();
+                }
+                
+                var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
+                dispatcherQueue?.TryEnqueue(() =>
+                {
+                    node.IsExpanded = true;
+                });
+                
+                return await FindAndExpandNodeAsync(node.Children, targetPath);
+            }
+        }
+        return null;
     }
 
     private void UpdateBreadcrumbs(string path)

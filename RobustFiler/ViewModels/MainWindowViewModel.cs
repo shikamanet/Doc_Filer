@@ -34,8 +34,14 @@ public partial class MainWindowViewModel : ObservableObject
         {
             AddFavorite(m.Value);
         });
+        
+        WeakReferenceMessenger.Default.Register<SessionChangedMessage>(this, (r, m) =>
+        {
+            _ = SaveSessionAsync();
+        });
 
         _ = LoadFavoritesAsync();
+        _ = LoadSessionAsync();
     }
 
     private async Task LoadFavoritesAsync()
@@ -71,6 +77,74 @@ public partial class MainWindowViewModel : ObservableObject
         await _fileService.SaveFavoritesAsync(Favorites);
     }
 
+    partial void OnSelectedTabChanged(TabItemViewModel? value)
+    {
+        if (value != null)
+        {
+            ToggleDualPaneCommand.NotifyCanExecuteChanged();
+            _ = SaveSessionAsync();
+        }
+    }
+
+    private async Task LoadSessionAsync()
+    {
+        var session = await _fileService.LoadSessionAsync();
+        if (session != null && session.Tabs.Count > 0)
+        {
+            foreach (var tabState in session.Tabs)
+            {
+                var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
+                if (!string.IsNullOrEmpty(tabState.PrimaryPath))
+                {
+                    _ = primaryPane.NavigateAsync(tabState.PrimaryPath);
+                }
+
+                var tab = new TabItemViewModel(primaryPane) { Header = tabState.Header };
+                
+                if (tabState.IsDualPane)
+                {
+                    var secondaryPane = new FilePaneViewModel(_fileService, _dialogService);
+                    if (!string.IsNullOrEmpty(tabState.SecondaryPath))
+                    {
+                        _ = secondaryPane.NavigateAsync(tabState.SecondaryPath);
+                    }
+                    tab.ToggleDualPane(secondaryPane);
+                }
+
+                Tabs.Add(tab);
+            }
+
+            if (session.SelectedTabIndex >= 0 && session.SelectedTabIndex < Tabs.Count)
+            {
+                SelectedTab = Tabs[session.SelectedTabIndex];
+            }
+            else
+            {
+                SelectedTab = Tabs.FirstOrDefault();
+            }
+        }
+        else
+        {
+            AddTab();
+        }
+    }
+
+    private async Task SaveSessionAsync()
+    {
+        var session = new SessionState
+        {
+            SelectedTabIndex = SelectedTab != null ? Tabs.IndexOf(SelectedTab) : 0,
+            Tabs = Tabs.Select(t => new TabState
+            {
+                Header = t.Header,
+                IsDualPane = t.IsDualPane,
+                PrimaryPath = t.PrimaryPane.CurrentPath,
+                SecondaryPath = t.SecondaryPane?.CurrentPath ?? string.Empty
+            }).ToList()
+        };
+        await _fileService.SaveSessionAsync(session);
+    }
+
     partial void OnSelectedFavoriteChanged(FavoriteItem? value)
     {
         if (value != null && SelectedTab?.PrimaryPane != null)
@@ -90,18 +164,21 @@ public partial class MainWindowViewModel : ObservableObject
         var tab = new TabItemViewModel(primaryPane);
         Tabs.Add(tab);
         SelectedTab = tab;
+        _ = SaveSessionAsync();
     }
 
     [RelayCommand]
     public void CloseTab(TabItemViewModel? tab)
     {
-        if (tab == null) return;
-        Tabs.Remove(tab);
-        tab.Dispose();
-        
-        if (Tabs.Count == 0)
+        if (tab != null && Tabs.Contains(tab))
         {
-            AddTab();
+            Tabs.Remove(tab);
+            tab.Dispose();
+            if (Tabs.Count == 0)
+            {
+                AddTab();
+            }
+            _ = SaveSessionAsync();
         }
     }
 
@@ -110,8 +187,16 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (SelectedTab != null)
         {
-            var newPane = new FilePaneViewModel(_fileService, _dialogService);
-            SelectedTab.ToggleDualPane(newPane);
+            if (!SelectedTab.IsDualPane)
+            {
+                var newPane = new FilePaneViewModel(_fileService, _dialogService);
+                SelectedTab.ToggleDualPane(newPane);
+            }
+            else
+            {
+                SelectedTab.ToggleDualPane(null);
+            }
+            _ = SaveSessionAsync();
         }
     }
 }

@@ -48,7 +48,7 @@ public partial class TabItemViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void ToggleDualPane(FilePaneViewModel newSecondaryPane)
+    public void ToggleDualPane(FilePaneViewModel? newSecondaryPane)
     {
         if (IsDualPane)
         {
@@ -59,7 +59,10 @@ public partial class TabItemViewModel : ObservableObject, IDisposable
         else
         {
             SecondaryPane = newSecondaryPane;
-            _ = SecondaryPane.NavigateAsync(PrimaryPane.CurrentPath);
+            if (SecondaryPane != null)
+            {
+                _ = SecondaryPane.NavigateAsync(PrimaryPane.CurrentPath);
+            }
             IsDualPane = true;
         }
     }

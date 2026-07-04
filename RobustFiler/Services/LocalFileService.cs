@@ -266,10 +266,17 @@ public class LocalFileService : IFileService
         }
     }
 
+    private string GetAppLocalFolder()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var appFolder = Path.Combine(localAppData, "RobustFiler");
+        Directory.CreateDirectory(appFolder);
+        return appFolder;
+    }
+
     public async Task<IEnumerable<FavoriteItem>> LoadFavoritesAsync()
     {
-        var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
-        var filePath = Path.Combine(localFolder, "favorites.json");
+        var filePath = Path.Combine(GetAppLocalFolder(), "favorites.json");
         if (!File.Exists(filePath))
         {
             return new List<FavoriteItem>();
@@ -291,9 +298,38 @@ public class LocalFileService : IFileService
     {
         try
         {
-            var localFolder = Windows.Storage.ApplicationData.Current.LocalFolder.Path;
-            var filePath = Path.Combine(localFolder, "favorites.json");
+            var filePath = Path.Combine(GetAppLocalFolder(), "favorites.json");
             var json = JsonSerializer.Serialize(favorites);
+            await File.WriteAllTextAsync(filePath, json);
+        }
+        catch
+        {
+            // Ignored
+        }
+    }
+
+    public async Task<SessionState?> LoadSessionAsync()
+    {
+        var filePath = Path.Combine(GetAppLocalFolder(), "session.json");
+        if (!File.Exists(filePath)) return null;
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(filePath);
+            return JsonSerializer.Deserialize<SessionState>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task SaveSessionAsync(SessionState session)
+    {
+        try
+        {
+            var filePath = Path.Combine(GetAppLocalFolder(), "session.json");
+            var json = JsonSerializer.Serialize(session);
             await File.WriteAllTextAsync(filePath, json);
         }
         catch

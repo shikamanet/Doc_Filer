@@ -58,7 +58,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <TreeView Grid.Column="0" ItemsSource="{x:Bind ViewModel.RootDrives, Mode=OneWay}"
+            <TreeView x:Name="FolderTree" Grid.Column="0" ItemsSource="{x:Bind ViewModel.RootDrives, Mode=OneWay}"
                       ItemInvoked="TreeView_ItemInvoked">
                 <TreeView.ItemContainerStyle>
                     <Style TargetType="TreeViewItem">
@@ -67,7 +67,7 @@
                         <Setter Property="ContextFlyout">
                             <Setter.Value>
                                 <MenuFlyout>
-                                    <MenuFlyoutItem Text="お気に入りに追加" Command="{Binding ElementName=PaneControl, Path=ViewModel.AddToFavoritesCommand}" CommandParameter="{Binding}" />
+                                    <MenuFlyoutItem Text="お気に入りに追加" Click="MenuFlyoutItem_AddFavorite_Click" />
                                 </MenuFlyout>
                             </Setter.Value>
                         </Setter>
@@ -132,13 +132,13 @@
                             <Setter Property="ContextFlyout">
                                 <Setter.Value>
                                     <MenuFlyout>
-                                        <MenuFlyoutItem Text="コピー" Command="{Binding ElementName=PaneControl, Path=ViewModel.CopyFilesCommand}" />
-                                        <MenuFlyoutItem Text="切り取り" Command="{Binding ElementName=PaneControl, Path=ViewModel.CutFilesCommand}" />
+                                        <MenuFlyoutItem Text="コピー" Click="MenuFlyoutItem_Copy_Click" />
+                                        <MenuFlyoutItem Text="切り取り" Click="MenuFlyoutItem_Cut_Click" />
                                         <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="お気に入りに追加" Command="{Binding ElementName=PaneControl, Path=ViewModel.AddToFavoritesCommand}" CommandParameter="{Binding}" />
+                                        <MenuFlyoutItem Text="お気に入りに追加" Click="MenuFlyoutItem_AddFavorite_Click" />
                                         <MenuFlyoutSeparator />
-                                        <MenuFlyoutItem Text="名前の変更" Command="{Binding ElementName=PaneControl, Path=ViewModel.RenameCommand}" />
-                                        <MenuFlyoutItem Text="削除" Command="{Binding ElementName=PaneControl, Path=ViewModel.DeleteCommand}" />
+                                        <MenuFlyoutItem Text="名前の変更" Click="MenuFlyoutItem_Rename_Click" />
+                                        <MenuFlyoutItem Text="削除" Click="MenuFlyoutItem_Delete_Click" />
                                     </MenuFlyout>
                                 </Setter.Value>
                             </Setter>

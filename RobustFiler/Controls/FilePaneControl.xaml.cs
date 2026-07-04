@@ -14,7 +14,25 @@ public sealed partial class FilePaneControl : UserControl
     public FilePaneControl()
     {
         InitializeComponent();
-        DataContextChanged += (s, e) => Bindings.Update();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(Microsoft.UI.Xaml.FrameworkElement sender, Microsoft.UI.Xaml.DataContextChangedEventArgs args)
+    {
+        Bindings.Update();
+        if (ViewModel != null)
+        {
+            ViewModel.NodeSelectedRequest -= ViewModel_NodeSelectedRequest;
+            ViewModel.NodeSelectedRequest += ViewModel_NodeSelectedRequest;
+        }
+    }
+
+    private void ViewModel_NodeSelectedRequest(object? sender, FileNodeViewModel node)
+    {
+        if (FolderTree != null)
+        {
+            FolderTree.SelectedItem = node;
+        }
     }
 
     private void TreeView_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
@@ -258,5 +276,37 @@ public sealed partial class FilePaneControl : UserControl
         {
             row.Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Transparent);
         }
+    }
+
+    private void MenuFlyoutItem_Copy_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        ViewModel.CopyFilesCommand.Execute(null);
+    }
+
+    private void MenuFlyoutItem_Cut_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        ViewModel.CutFilesCommand.Execute(null);
+    }
+
+    private void MenuFlyoutItem_AddFavorite_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is FileNodeViewModel node)
+        {
+            ViewModel.AddToFavoritesCommand.Execute(node);
+        }
+        else
+        {
+            ViewModel.AddToFavoritesCommand.Execute(null);
+        }
+    }
+
+    private void MenuFlyoutItem_Rename_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        ViewModel.RenameCommand.Execute(null);
+    }
+
+    private void MenuFlyoutItem_Delete_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        ViewModel.DeleteCommand.Execute(null);
     }
 }
