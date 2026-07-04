@@ -15,11 +15,45 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IFileService _fileService;
     private readonly IDialogService _dialogService;
 
-    public ObservableCollection<TabItemViewModel> Tabs { get; } = new();
+    public ObservableCollection<TabItemViewModel> Tabs => SelectedTabGroup?.Tabs ?? new ObservableCollection<TabItemViewModel>();
     public ObservableCollection<FavoriteItem> Favorites { get; } = new();
+    public ObservableCollection<TabGroupViewModel> TabGroups { get; } = new();
 
-    [ObservableProperty]
-    private TabItemViewModel? _selectedTab;
+    private TabGroupViewModel? _selectedTabGroup;
+    public TabGroupViewModel? SelectedTabGroup
+    {
+        get => _selectedTabGroup;
+        set
+        {
+            if (SetProperty(ref _selectedTabGroup, value))
+            {
+                foreach (var group in TabGroups)
+                {
+                    group.IsSelected = (group == _selectedTabGroup);
+                }
+                OnPropertyChanged(nameof(Tabs));
+                OnPropertyChanged(nameof(SelectedTab));
+                _ = SaveSessionAsync();
+            }
+        }
+    }
+
+    public TabItemViewModel? SelectedTab
+    {
+        get => SelectedTabGroup?.SelectedTab;
+        set
+        {
+            if (SelectedTabGroup != null)
+            {
+                if (SelectedTabGroup.SelectedTab != value)
+                {
+                    SelectedTabGroup.SelectedTab = value;
+                    OnPropertyChanged();
+                    OnSelectedTabChanged(value);
+                }
+            }
+        }
+    }
 
     [ObservableProperty]
     private FavoriteItem? _selectedFavorite;
@@ -28,7 +62,6 @@ public partial class MainWindowViewModel : ObservableObject
     {
         _fileService = fileService;
         _dialogService = dialogService;
-        AddTab();
 
         WeakReferenceMessenger.Default.Register<AddFavoriteMessage>(this, (r, m) =>
         {
@@ -45,10 +78,11 @@ public partial class MainWindowViewModel : ObservableObject
             var dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
             dispatcherQueue?.TryEnqueue(() =>
             {
+                if (SelectedTabGroup == null) return;
                 var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
                 _ = primaryPane.NavigateAsync(m.Path);
                 var tab = new TabItemViewModel(primaryPane);
-                Tabs.Add(tab);
+                SelectedTabGroup.Tabs.Add(tab);
                 SelectedTab = tab;
                 _ = SaveSessionAsync();
             });
@@ -60,11 +94,24 @@ public partial class MainWindowViewModel : ObservableObject
 
     private async Task LoadFavoritesAsync()
     {
-        var loaded = await _fileService.LoadFavoritesAsync();
-        foreach (var item in loaded)
+        var favs = await _fileService.LoadFavoritesAsync();
+        Favorites.Clear();
+        foreach (var item in favs)
+        {
+            await LoadIconsRecursiveAsync(item);
+            Favorites.Add(item);
+        }
+    }
+
+    private async Task LoadIconsRecursiveAsync(FavoriteItem item)
+    {
+        if (!item.IsFolder)
         {
             await item.LoadIconAsync();
-            Favorites.Add(item);
+        }
+        foreach (var child in item.Children)
+        {
+            await LoadIconsRecursiveAsync(child);
         }
     }
 
@@ -81,17 +128,72 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (item != null)
         {
-            Favorites.Remove(item);
+            RemoveFavoriteRecursive(Favorites, item);
             _ = SaveFavoritesAsync();
         }
     }
 
+    private bool RemoveFavoriteRecursive(System.Collections.Generic.IList<FavoriteItem> list, FavoriteItem target)
+    {
+        if (list.Contains(target))
+        {
+            list.Remove(target);
+            return true;
+        }
+        foreach (var node in list)
+        {
+            if (node.IsFolder && RemoveFavoriteRecursive(node.Children, target))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    [RelayCommand]
+    public async Task AddFavoriteFolderAsync()
+    {
+        var folderName = await _dialogService.ShowCreateFolderDialogAsync();
+        if (!string.IsNullOrWhiteSpace(folderName))
+        {
+            var folder = new FavoriteItem
+            {
+                Name = folderName,
+                IsFolder = true
+            };
+            Favorites.Add(folder);
+            _ = SaveFavoritesAsync();
+        }
+    }
+
+    [RelayCommand]
+    public async Task EditFavoriteAsync(FavoriteItem? item)
+    {
+        if (item != null)
+        {
+            var result = await _dialogService.ShowFavoriteSettingsDialogAsync(item);
+            if (result != null)
+            {
+                item.Name = result.Name;
+                item.Path = result.Path;
+                item.Arguments = result.Arguments;
+                
+                if (!item.IsFolder && !string.IsNullOrEmpty(item.Path))
+                {
+                    item.Icon = await RobustFiler.Helpers.IconHelper.GetIconAsync(item.Path, isDirectory: System.IO.Directory.Exists(item.Path));
+                }
+                _ = SaveFavoritesAsync();
+            }
+        }
+    }
+
+    [RelayCommand]
     private async Task SaveFavoritesAsync()
     {
         await _fileService.SaveFavoritesAsync(Favorites);
     }
 
-    partial void OnSelectedTabChanged(TabItemViewModel? value)
+    private void OnSelectedTabChanged(TabItemViewModel? value)
     {
         if (value != null)
         {
@@ -103,58 +205,111 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task LoadSessionAsync()
     {
         var session = await _fileService.LoadSessionAsync();
-        if (session != null && session.Tabs.Count > 0)
+        if (session != null)
         {
-            foreach (var tabState in session.Tabs)
+            if (session.Groups != null && session.Groups.Count > 0)
             {
-                var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
-                if (!string.IsNullOrEmpty(tabState.PrimaryPath))
+                foreach (var groupState in session.Groups)
                 {
-                    _ = primaryPane.NavigateAsync(tabState.PrimaryPath);
-                }
-
-                var tab = new TabItemViewModel(primaryPane) { Header = tabState.Header, IsLocked = tabState.IsLocked };
-                
-                if (tabState.IsDualPane)
-                {
-                    var secondaryPane = new FilePaneViewModel(_fileService, _dialogService);
-                    if (!string.IsNullOrEmpty(tabState.SecondaryPath))
+                    var groupVm = new TabGroupViewModel
                     {
-                        _ = secondaryPane.NavigateAsync(tabState.SecondaryPath);
+                        Name = groupState.Name,
+                        ColorHex = groupState.ColorHex
+                    };
+                    
+                    foreach (var tabState in groupState.Tabs)
+                    {
+                        var tab = CreateTabFromState(tabState);
+                        groupVm.Tabs.Add(tab);
                     }
-                    tab.ToggleDualPane(secondaryPane);
+                    if (groupState.SelectedTabIndex >= 0 && groupState.SelectedTabIndex < groupVm.Tabs.Count)
+                    {
+                        groupVm.SelectedTab = groupVm.Tabs[groupState.SelectedTabIndex];
+                    }
+                    else
+                    {
+                        groupVm.SelectedTab = groupVm.Tabs.FirstOrDefault();
+                    }
+                    TabGroups.Add(groupVm);
                 }
-
-                Tabs.Add(tab);
+                
+                if (session.SelectedGroupIndex >= 0 && session.SelectedGroupIndex < TabGroups.Count)
+                {
+                    SelectedTabGroup = TabGroups[session.SelectedGroupIndex];
+                }
+                else
+                {
+                    SelectedTabGroup = TabGroups.FirstOrDefault();
+                }
             }
-
-            if (session.SelectedTabIndex >= 0 && session.SelectedTabIndex < Tabs.Count)
+            else if (session.Tabs != null && session.Tabs.Count > 0)
             {
-                SelectedTab = Tabs[session.SelectedTabIndex];
-            }
-            else
-            {
-                SelectedTab = Tabs.FirstOrDefault();
+                // Legacy support for older session formats
+                var defaultGroup = new TabGroupViewModel { Name = "デフォルト" };
+                foreach (var tabState in session.Tabs)
+                {
+                    var tab = CreateTabFromState(tabState);
+                    defaultGroup.Tabs.Add(tab);
+                }
+                if (session.SelectedTabIndex >= 0 && session.SelectedTabIndex < defaultGroup.Tabs.Count)
+                {
+                    defaultGroup.SelectedTab = defaultGroup.Tabs[session.SelectedTabIndex];
+                }
+                else
+                {
+                    defaultGroup.SelectedTab = defaultGroup.Tabs.FirstOrDefault();
+                }
+                TabGroups.Add(defaultGroup);
+                SelectedTabGroup = defaultGroup;
             }
         }
-        else
+
+        if (TabGroups.Count == 0)
         {
-            AddTab();
+            AddTabGroup();
         }
+    }
+
+    private TabItemViewModel CreateTabFromState(TabState tabState)
+    {
+        var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
+        if (!string.IsNullOrEmpty(tabState.PrimaryPath))
+        {
+            _ = primaryPane.NavigateAsync(tabState.PrimaryPath);
+        }
+
+        var tab = new TabItemViewModel(primaryPane) { Header = tabState.Header, IsLocked = tabState.IsLocked };
+        
+        if (tabState.IsDualPane)
+        {
+            var secondaryPane = new FilePaneViewModel(_fileService, _dialogService);
+            if (!string.IsNullOrEmpty(tabState.SecondaryPath))
+            {
+                _ = secondaryPane.NavigateAsync(tabState.SecondaryPath);
+            }
+            tab.ToggleDualPane(secondaryPane);
+        }
+        return tab;
     }
 
     private async Task SaveSessionAsync()
     {
         var session = new SessionState
         {
-            SelectedTabIndex = SelectedTab != null ? Tabs.IndexOf(SelectedTab) : 0,
-            Tabs = Tabs.Select(t => new TabState
+            SelectedGroupIndex = SelectedTabGroup != null ? TabGroups.IndexOf(SelectedTabGroup) : 0,
+            Groups = TabGroups.Select(g => new TabGroupState
             {
-                Header = t.Header,
-                IsDualPane = t.IsDualPane,
-                PrimaryPath = t.PrimaryPane.CurrentPath,
-                SecondaryPath = t.SecondaryPane?.CurrentPath ?? string.Empty,
-                IsLocked = t.IsLocked
+                Name = g.Name,
+                ColorHex = g.ColorHex,
+                SelectedTabIndex = g.SelectedTab != null ? g.Tabs.IndexOf(g.SelectedTab) : 0,
+                Tabs = g.Tabs.Select(t => new TabState
+                {
+                    Header = t.Header,
+                    IsDualPane = t.IsDualPane,
+                    PrimaryPath = t.PrimaryPane.CurrentPath,
+                    SecondaryPath = t.SecondaryPane?.CurrentPath ?? string.Empty,
+                    IsLocked = t.IsLocked
+                }).ToList()
             }).ToList()
         };
         await _fileService.SaveSessionAsync(session);
@@ -164,13 +319,18 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (value != null && SelectedTab?.PrimaryPane != null)
         {
-            if (System.IO.Directory.Exists(value.Path))
+            if (value.IsFolder)
+            {
+                // Toggle expansion or do nothing
+                value.IsExpanded = !value.IsExpanded;
+            }
+            else if (System.IO.Directory.Exists(value.Path))
             {
                 _ = SelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true);
             }
             else if (System.IO.File.Exists(value.Path))
             {
-                _ = _fileService.OpenFileAsync(value.Path);
+                _ = _fileService.OpenFileAsync(value.Path, value.Arguments ?? "");
             }
             else
             {
@@ -183,23 +343,86 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void AddTab()
+    public void AddTabGroup()
     {
+        var newGroup = new TabGroupViewModel { Name = $"グループ {TabGroups.Count + 1}" };
         var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
         var tab = new TabItemViewModel(primaryPane);
-        Tabs.Add(tab);
-        SelectedTab = tab;
-        _ = SaveSessionAsync();
+        newGroup.Tabs.Add(tab);
+        newGroup.SelectedTab = tab;
+        
+        TabGroups.Add(newGroup);
+        SelectedTabGroup = newGroup;
+    }
+
+    [RelayCommand]
+    public void RemoveTabGroup(TabGroupViewModel? group)
+    {
+        if (group != null && TabGroups.Contains(group))
+        {
+            TabGroups.Remove(group);
+            if (TabGroups.Count == 0)
+            {
+                AddTabGroup();
+            }
+            else if (SelectedTabGroup == null)
+            {
+                SelectedTabGroup = TabGroups.FirstOrDefault();
+            }
+            _ = SaveSessionAsync();
+        }
+    }
+
+    [RelayCommand]
+    public async Task RenameTabGroup(TabGroupViewModel? group)
+    {
+        if (group != null)
+        {
+            var newName = await _dialogService.ShowInputDialogAsync("グループ名の変更", group.Name);
+            if (!string.IsNullOrWhiteSpace(newName))
+            {
+                group.Name = newName;
+                _ = SaveSessionAsync();
+            }
+        }
+    }
+
+    [RelayCommand]
+    public void ChangeTabGroupColor(TabGroupViewModel? group)
+    {
+        // This is a placeholder for standard relay command if needed from UI.
+        // The actual color change can be done directly by passing parameter or through UI flyouts.
+    }
+
+    public void SetTabGroupColor(TabGroupViewModel group, string colorHex)
+    {
+        if (group != null)
+        {
+            group.ColorHex = colorHex;
+            _ = SaveSessionAsync();
+        }
+    }
+
+    [RelayCommand]
+    public void AddTab()
+    {
+        if (SelectedTabGroup == null) return;
+        var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
+        var tab = new TabItemViewModel(primaryPane);
+        SelectedTabGroup.Tabs.Add(tab);
+        SelectedTabGroup.SelectedTab = tab;
+        SelectedTab = tab; // This will trigger OnSelectedTabChanged and SaveSession
     }
 
     [RelayCommand]
     public void CloseTab(TabItemViewModel? tab)
     {
-        if (tab != null && Tabs.Contains(tab) && !tab.IsLocked)
+        if (SelectedTabGroup == null) return;
+        if (tab != null && SelectedTabGroup.Tabs.Contains(tab) && !tab.IsLocked)
         {
-            Tabs.Remove(tab);
+            SelectedTabGroup.Tabs.Remove(tab);
             tab.Dispose();
-            if (Tabs.Count == 0)
+            if (SelectedTabGroup.Tabs.Count == 0)
             {
                 AddTab();
             }
@@ -210,11 +433,11 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     public void CloseOtherTabs(TabItemViewModel? tab)
     {
-        if (tab == null) return;
-        var tabsToRemove = Tabs.Where(t => t != tab && !t.IsLocked).ToList();
+        if (SelectedTabGroup == null || tab == null) return;
+        var tabsToRemove = SelectedTabGroup.Tabs.Where(t => t != tab && !t.IsLocked).ToList();
         foreach (var t in tabsToRemove)
         {
-            Tabs.Remove(t);
+            SelectedTabGroup.Tabs.Remove(t);
             t.Dispose();
         }
         _ = SaveSessionAsync();
@@ -223,14 +446,14 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     public void CloseTabsToRight(TabItemViewModel? tab)
     {
-        if (tab == null) return;
-        int index = Tabs.IndexOf(tab);
+        if (SelectedTabGroup == null || tab == null) return;
+        int index = SelectedTabGroup.Tabs.IndexOf(tab);
         if (index >= 0)
         {
-            var tabsToRemove = Tabs.Skip(index + 1).Where(t => !t.IsLocked).ToList();
+            var tabsToRemove = SelectedTabGroup.Tabs.Skip(index + 1).Where(t => !t.IsLocked).ToList();
             foreach (var t in tabsToRemove)
             {
-                Tabs.Remove(t);
+                SelectedTabGroup.Tabs.Remove(t);
                 t.Dispose();
             }
             _ = SaveSessionAsync();
@@ -240,13 +463,14 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     public void CloseAllTabs()
     {
-        var tabsToRemove = Tabs.Where(t => !t.IsLocked).ToList();
+        if (SelectedTabGroup == null) return;
+        var tabsToRemove = SelectedTabGroup.Tabs.Where(t => !t.IsLocked).ToList();
         foreach (var t in tabsToRemove)
         {
-            Tabs.Remove(t);
+            SelectedTabGroup.Tabs.Remove(t);
             t.Dispose();
         }
-        if (Tabs.Count == 0)
+        if (SelectedTabGroup.Tabs.Count == 0)
         {
             AddTab();
         }

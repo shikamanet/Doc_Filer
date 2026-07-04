@@ -37,6 +37,17 @@ public sealed partial class MainPage : Page
         }
     }
 
+    private void TabView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is TabView tabView && tabView.DataContext is TabGroupViewModel group)
+        {
+            if (group == ViewModel.SelectedTabGroup)
+            {
+                ViewModel.SelectedTab = group.SelectedTab;
+            }
+        }
+    }
+
     private void CloseTabMenuItem_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         if (sender is MenuFlyoutItem item && item.DataContext is TabItemViewModel tab)
@@ -64,5 +75,61 @@ public sealed partial class MainPage : Page
     private void CloseAllTabsMenuItem_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
         ViewModel.CloseAllTabsCommand.Execute(null);
+    }
+
+    private void MenuFlyoutItem_RenameGroup_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is TabGroupViewModel group)
+        {
+            ViewModel.RenameTabGroupCommand.Execute(group);
+        }
+    }
+
+    private void MenuFlyoutItem_RemoveGroup_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is TabGroupViewModel group)
+        {
+            ViewModel.RemoveTabGroupCommand.Execute(group);
+        }
+    }
+
+    private void MenuFlyoutItem_ChangeColor_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is TabGroupViewModel group && item.Tag is string colorHex)
+        {
+            ViewModel.SetTabGroupColor(group, colorHex);
+        }
+    }
+
+    private void TreeView_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+    {
+        if (args.InvokedItem is RobustFiler.Models.FavoriteItem item)
+        {
+            if (!item.IsFolder)
+            {
+                ViewModel.SelectedFavorite = item;
+            }
+        }
+    }
+
+    private void TreeView_DragItemsCompleted(TreeView sender, TreeViewDragItemsCompletedEventArgs args)
+    {
+        _ = ViewModel.SaveFavoritesCommand.ExecuteAsync(null);
+    }
+
+    private void MenuFlyoutItem_EditFavorite_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is RobustFiler.Models.FavoriteItem fav)
+        {
+            ViewModel.EditFavoriteCommand.Execute(fav);
+        }
+    }
+
+    private void MenuFlyoutItem_RemoveFavorite_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        if (sender is MenuFlyoutItem item && item.DataContext is RobustFiler.Models.FavoriteItem fav)
+        {
+            ViewModel.RemoveFavoriteCommand.Execute(fav);
+        }
     }
 }

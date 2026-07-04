@@ -13,6 +13,17 @@ public partial class FavoriteItem : ObservableObject
     [ObservableProperty]
     private string _path = string.Empty;
 
+    [ObservableProperty]
+    private string _arguments = string.Empty;
+
+    [ObservableProperty]
+    private bool _isFolder;
+
+    [ObservableProperty]
+    private bool _isExpanded;
+
+    public System.Collections.ObjectModel.ObservableCollection<FavoriteItem> Children { get; set; } = new();
+
     [JsonIgnore]
     [ObservableProperty]
     private ImageSource? _icon;

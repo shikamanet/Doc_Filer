@@ -174,21 +174,26 @@ public class LocalFileService : IFileService
         });
     }
 
-    public async Task OpenFileAsync(string path)
+    public async Task OpenFileAsync(string path, string arguments = "")
     {
         await Task.Run(() =>
         {
             try
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                var startInfo = new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = path,
                     UseShellExecute = true
-                });
+                };
+                if (!string.IsNullOrEmpty(arguments))
+                {
+                    startInfo.Arguments = arguments;
+                }
+                System.Diagnostics.Process.Start(startInfo);
             }
             catch
             {
-                throw;
+                // Ignore error if canceled
             }
         });
     }

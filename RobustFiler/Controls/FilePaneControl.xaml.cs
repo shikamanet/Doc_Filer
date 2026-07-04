@@ -49,7 +49,7 @@ public sealed partial class FilePaneControl : UserControl
         }
     }
 
-    private void TreeView_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+    private void TreeView_ItemInvoked(Microsoft.UI.Xaml.Controls.TreeView sender, Microsoft.UI.Xaml.Controls.TreeViewItemInvokedEventArgs args)
     {
         if (args.InvokedItem is FileNodeViewModel node && node.IsDirectory)
         {
@@ -293,28 +293,32 @@ public sealed partial class FilePaneControl : UserControl
         }
     }
 
-    private void Background_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    private void EnsureNodeSelected(object sender)
     {
-        // DataGrid上の右クリックはDataGrid_RightTappedで処理するため、ここではスキップ
-        var fe = e.OriginalSource as Microsoft.UI.Xaml.FrameworkElement;
-        var parent = fe;
-        while (parent != null)
+        if (sender is Microsoft.UI.Xaml.FrameworkElement element && element.DataContext is FileNodeViewModel node)
         {
-            if (parent is CommunityToolkit.WinUI.UI.Controls.DataGrid)
-                return;
-            parent = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(parent) as Microsoft.UI.Xaml.FrameworkElement;
+            if (!ViewModel.SelectedItems.Contains(node))
+            {
+                FileListGrid.SelectedItem = node;
+            }
         }
+    }
 
-        e.Handled = true;
-        Vanara.PInvoke.User32.GetCursorPos(out var pt);
-        var dispatcherQueue = DispatcherQueue;
-        Helpers.ShellContextMenuHelper.ShowContextMenu(
-            new[] { ViewModel.CurrentPath }, pt.X, pt.Y,
-            () => dispatcherQueue?.TryEnqueue(() => _ = ViewModel?.NavigateAsync(ViewModel.CurrentPath)));
+    private void MenuFlyoutItem_Copy_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        EnsureNodeSelected(sender);
+        ViewModel.CopyFilesCommand.Execute(null);
+    }
+
+    private void MenuFlyoutItem_Cut_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        EnsureNodeSelected(sender);
+        ViewModel.CutFilesCommand.Execute(null);
     }
 
     private void MenuFlyoutItem_AddFavorite_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
+        EnsureNodeSelected(sender);
         if (sender is MenuFlyoutItem item && item.DataContext is FileNodeViewModel node)
         {
             ViewModel.AddToFavoritesCommand.Execute(node);
@@ -325,40 +329,15 @@ public sealed partial class FilePaneControl : UserControl
         }
     }
 
-    private void DataGrid_RightTapped(object sender, Microsoft.UI.Xaml.Input.RightTappedRoutedEventArgs e)
+    private void MenuFlyoutItem_Rename_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
     {
-        e.Handled = true;
-        
-        var fe = e.OriginalSource as Microsoft.UI.Xaml.FrameworkElement;
-        var row = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(fe);
-        while (row != null && !(row is CommunityToolkit.WinUI.UI.Controls.DataGridRow))
-        {
-            row = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(row);
-        }
+        EnsureNodeSelected(sender);
+        ViewModel.RenameCommand.Execute(null);
+    }
 
-        if (row is CommunityToolkit.WinUI.UI.Controls.DataGridRow gridRow && gridRow.DataContext is FileNodeViewModel node)
-        {
-            if (!ViewModel.SelectedItems.Contains(node))
-            {
-                ViewModel.SelectedItems.Clear();
-                ViewModel.SelectedItems.Add(node);
-            }
-        }
-        else
-        {
-            // 行以外の場所（背景）での右クリック → フォルダのコンテキストメニュー
-            Vanara.PInvoke.User32.GetCursorPos(out var bgPt);
-            var dispatcherQueue2 = DispatcherQueue;
-            Helpers.ShellContextMenuHelper.ShowContextMenu(
-                new[] { ViewModel.CurrentPath }, bgPt.X, bgPt.Y,
-                () => dispatcherQueue2?.TryEnqueue(() => _ = ViewModel?.NavigateAsync(ViewModel.CurrentPath)));
-            return;
-        }
-
-        var paths = ViewModel.SelectedItems.Select(n => n.FullPath).ToArray();
-        Vanara.PInvoke.User32.GetCursorPos(out var pt);
-        var dispatcherQueue = DispatcherQueue;
-        Helpers.ShellContextMenuHelper.ShowContextMenu(paths, pt.X, pt.Y,
-            () => dispatcherQueue?.TryEnqueue(() => _ = ViewModel?.NavigateAsync(ViewModel.CurrentPath)));
+    private void MenuFlyoutItem_Delete_Click(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        EnsureNodeSelected(sender);
+        ViewModel.DeleteCommand.Execute(null);
     }
 }
