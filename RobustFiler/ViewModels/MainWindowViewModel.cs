@@ -149,8 +149,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (value != null && SelectedTab?.PrimaryPane != null)
         {
-            // Navigate the primary pane to the favorite path
-            _ = SelectedTab.PrimaryPane.NavigateAsync(value.Path);
+            _ = SelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true);
             
             // Reset selection so the user can click it again
             SelectedFavorite = null; 

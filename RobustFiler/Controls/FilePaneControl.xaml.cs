@@ -27,19 +27,24 @@ public sealed partial class FilePaneControl : UserControl
         }
     }
 
-    private async void ViewModel_NodeSelectedRequest(object? sender, FileNodeViewModel node)
+    private async void ViewModel_NodeSelectedRequest(object? sender, (FileNodeViewModel Node, bool BringToTop) args)
     {
         if (FolderTree != null)
         {
-            FolderTree.SelectedItem = node;
+            FolderTree.SelectedItem = args.Node;
 
             // UIがツリーの展開とノードの生成を完了するまで少し待機する
             await System.Threading.Tasks.Task.Delay(100);
 
-            var container = FolderTree.ContainerFromItem(node) as Microsoft.UI.Xaml.UIElement;
+            var container = FolderTree.ContainerFromItem(args.Node) as Microsoft.UI.Xaml.UIElement;
             if (container != null)
             {
-                container.StartBringIntoView(new Microsoft.UI.Xaml.BringIntoViewOptions() { AnimationDesired = true });
+                var options = new Microsoft.UI.Xaml.BringIntoViewOptions() { AnimationDesired = true };
+                if (args.BringToTop)
+                {
+                    options.VerticalAlignmentRatio = 0.0;
+                }
+                container.StartBringIntoView(options);
             }
         }
     }
@@ -56,7 +61,7 @@ public sealed partial class FilePaneControl : UserControl
     {
         if (args.Item is BreadcrumbItem item)
         {
-            _ = ViewModel.NavigateCommand.ExecuteAsync(item.Path);
+            _ = ViewModel.NavigateToPathAsync(item.Path, bringToTop: true);
         }
     }
 
@@ -93,7 +98,7 @@ public sealed partial class FilePaneControl : UserControl
     {
         if (e.Key == Windows.System.VirtualKey.Enter)
         {
-            _ = ViewModel.NavigateCommand.ExecuteAsync(AddressTextBox.Text);
+            _ = ViewModel.NavigateToPathAsync(AddressTextBox.Text, bringToTop: true);
             AddressTextBox.Visibility = Microsoft.UI.Xaml.Visibility.Collapsed;
             Breadcrumb.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
             e.Handled = true;
@@ -143,7 +148,7 @@ public sealed partial class FilePaneControl : UserControl
     {
         if (sender is CommunityToolkit.WinUI.UI.Controls.DataGrid dataGrid && dataGrid.SelectedItem is FileNodeViewModel node)
         {
-            _ = ViewModel.OpenNodeCommand.ExecuteAsync(node);
+            _ = ViewModel.NavigateToPathAsync(node.FullPath, bringToTop: true);
         }
     }
 

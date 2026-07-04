@@ -21,7 +21,7 @@ public class BreadcrumbItem
 
 public partial class FilePaneViewModel : ObservableObject, IDisposable
 {
-    public event EventHandler<FileNodeViewModel>? NodeSelectedRequest;
+    public event EventHandler<(FileNodeViewModel Node, bool BringToTop)>? NodeSelectedRequest;
     private readonly IFileService _fileService;
     private readonly IDialogService _dialogService;
     private readonly Stack<string> _backHistory = new();
@@ -105,17 +105,16 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     public async Task NavigateAsync(string? path)
     {
         if (string.IsNullOrWhiteSpace(path) || CurrentPath == path) return;
-
-        if (!string.IsNullOrEmpty(CurrentPath))
-        {
-            _backHistory.Push(CurrentPath);
-            _forwardHistory.Clear();
-        }
-
-        await NavigateInternalAsync(path, isHistoryNavigation: false);
+        await NavigateInternalAsync(path, false, false);
     }
 
-    private async Task NavigateInternalAsync(string path, bool isHistoryNavigation)
+    public async Task NavigateToPathAsync(string path, bool bringToTop)
+    {
+        if (string.IsNullOrWhiteSpace(path) || CurrentPath == path) return;
+        await NavigateInternalAsync(path, false, bringToTop);
+    }
+
+    private async Task NavigateInternalAsync(string path, bool isHistoryNavigation, bool bringToTop = false)
     {
         if (_isNavigating) return;
         _isNavigating = true;
@@ -124,6 +123,12 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         {
             if (Directory.Exists(path))
             {
+                if (!isHistoryNavigation && !string.IsNullOrEmpty(CurrentPath))
+                {
+                    _backHistory.Push(CurrentPath);
+                    _forwardHistory.Clear();
+                }
+
                 CurrentPath = path;
                 UpdateBreadcrumbs(path);
                 await LoadFolderContentCoreAsync(path);
@@ -146,20 +151,20 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             
             if (!isHistoryNavigation && Directory.Exists(path))
             {
-                _ = ExpandToPathAsync(path);
+                _ = ExpandToPathAsync(path, bringToTop);
             }
         }
     }
 
-    private async Task ExpandToPathAsync(string targetPath)
+    private async Task ExpandToPathAsync(string targetPath, bool bringToTop)
     {
-        var targetNode = await FindAndExpandNodeAsync(RootDrives, targetPath);
-        if (targetNode != null)
+        var node = await FindAndExpandNodeAsync(RootDrives, targetPath);
+        if (node != null)
         {
             var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
             dispatcherQueue?.TryEnqueue(() =>
             {
-                NodeSelectedRequest?.Invoke(this, targetNode);
+                NodeSelectedRequest?.Invoke(this, (node, bringToTop));
             });
         }
     }
