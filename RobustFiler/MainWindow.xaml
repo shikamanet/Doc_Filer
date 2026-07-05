@@ -33,19 +33,7 @@
                 <TextBlock Text="RobustFiler" VerticalAlignment="Center" FontSize="12" />
             </StackPanel>
 
-            <!-- Dual Pane Button -->
-            <!-- Placed before the caption buttons -->
-            <Button Grid.Column="2"
-                    Command="{x:Bind ViewModel.ToggleDualPaneCommand}"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    Width="36" Height="32"
-                    ToolTipService.ToolTip="デュアルペイン">
-                <!-- Make icon smaller -->
-                <Viewbox Width="14" Height="14">
-                    <SymbolIcon Symbol="TwoPage" />
-                </Viewbox>
-            </Button>
+            <!-- Dual Pane Button Removed (Permanent Dual Pane) -->
         </Grid>
 
         <!--

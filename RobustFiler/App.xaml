@@ -11,7 +11,33 @@
                 <ResourceDictionary Source="ms-appx:///Microsoft.UI.Xaml/DensityStyles/Compact.xaml" />
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
-            <!-- Other app resources here -->
+            
+            <!-- Global sizing overrides for a denser, VS Code-like UI -->
+            <x:Double x:Key="ControlContentThemeFontSize">12</x:Double>
+            <x:Double x:Key="BodyTextBlockFontSize">12</x:Double>
+            <x:Double x:Key="CaptionTextBlockFontSize">11</x:Double>
+            <x:Double x:Key="SubtitleTextBlockFontSize">14</x:Double>
+            
+            <!-- Control heights and paddings -->
+            <x:Double x:Key="ListViewItemMinHeight">24</x:Double>
+            <x:Double x:Key="TreeViewItemMinHeight">22</x:Double>
+            <x:Double x:Key="TabViewItemHeaderMinHeight">24</x:Double>
+            <x:Double x:Key="TabViewItemHeaderFontSize">12</x:Double>
+            <Thickness x:Key="TreeViewItemContentMargin">0,0,0,0</Thickness>
+            <Thickness x:Key="ListViewItemMargin">0,0,0,0</Thickness>
+            <Thickness x:Key="ListViewItemPadding">4,2,4,2</Thickness>
+            
+            <!-- VS Code style TabView overrides -->
+            <CornerRadius x:Key="TabViewItemHeaderCornerRadius">0</CornerRadius>
+            <CornerRadius x:Key="TabViewItemHeaderBackgroundCornerRadius">0</CornerRadius>
+            <Thickness x:Key="TabViewItemHeaderBorderThickness">0,0,1,0</Thickness>
+            <!-- Disable standard bottom selection indicator (make transparent) -->
+            <SolidColorBrush x:Key="TabViewItemSelectionIndicatorForeground" Color="Transparent" />
+            
+            <!-- Close Button Overrides (if supported) -->
+            <x:Double x:Key="TabViewItemHeaderCloseButtonSize">16</x:Double>
+            <x:Double x:Key="TabViewItemHeaderCloseButtonIconSize">8</x:Double>
+            <Thickness x:Key="TabViewItemHeaderPadding">8,0,4,0</Thickness>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

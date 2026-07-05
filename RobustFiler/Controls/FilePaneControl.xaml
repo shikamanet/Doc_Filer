@@ -114,7 +114,7 @@
                                    DragOver="DataGrid_DragOver"
                                    Drop="DataGrid_Drop"
                                    GridLinesVisibility="None"
-                                   RowHeight="32">
+                                   RowHeight="24">
                     <controls:DataGrid.ColumnHeaderStyle>
                         <Style TargetType="primitives:DataGridColumnHeader">
                             <Setter Property="ContextFlyout">
@@ -150,7 +150,7 @@
                         <controls:DataGridTemplateColumn Header="名前" Tag="Name">
                             <controls:DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="viewmodels:FileNodeViewModel">
-                                    <StackPanel Orientation="Horizontal" Spacing="12" Padding="4" Background="Transparent">
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Padding="2,0" Background="Transparent">
                                         <Image Source="{x:Bind FileIcon, Mode=OneWay}" Width="16" Height="16" VerticalAlignment="Center" />
                                         <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center" />
                                     </StackPanel>

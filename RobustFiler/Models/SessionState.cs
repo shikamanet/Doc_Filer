@@ -17,6 +17,9 @@ public class TabGroupState
     public string ColorHex { get; set; } = "Transparent";
     public List<TabState> Tabs { get; set; } = new();
     public int SelectedTabIndex { get; set; }
+    
+    public List<TabState> SecondaryTabs { get; set; } = new();
+    public int SecondarySelectedTabIndex { get; set; }
 }
 
 public class SessionState

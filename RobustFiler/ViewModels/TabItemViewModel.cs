@@ -8,20 +8,27 @@ public partial class TabItemViewModel : ObservableObject, IDisposable
 {
     public FilePaneViewModel PrimaryPane { get; }
 
-    [ObservableProperty]
-    private FilePaneViewModel? _secondaryPane;
 
-    [ObservableProperty]
-    private bool _isDualPane;
 
     [ObservableProperty]
     private string _header = "新しいタブ";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsClosable))]
+    [NotifyPropertyChangedFor(nameof(IsCloseButtonVisible))]
     private bool _isLocked;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCloseButtonVisible))]
+    private bool _isSelected;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsCloseButtonVisible))]
+    private bool _isHovered;
+
     public bool IsClosable => !IsLocked;
+
+    public bool IsCloseButtonVisible => IsClosable && IsHovered;
 
     public TabItemViewModel(FilePaneViewModel primaryPane)
     {
@@ -58,7 +65,8 @@ public partial class TabItemViewModel : ObservableObject, IDisposable
         }
         else
         {
-            Header = System.IO.Path.GetFileName(path);
+            var trimmedPath = path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+            Header = System.IO.Path.GetFileName(trimmedPath);
             if (string.IsNullOrEmpty(Header))
             {
                 Header = path; // Drive root e.g. "C:\"
@@ -66,30 +74,11 @@ public partial class TabItemViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void ToggleDualPane(FilePaneViewModel? newSecondaryPane)
-    {
-        if (IsDualPane)
-        {
-            SecondaryPane?.Dispose();
-            SecondaryPane = null;
-            IsDualPane = false;
-        }
-        else
-        {
-            SecondaryPane = newSecondaryPane;
-            if (SecondaryPane != null)
-            {
-                SecondaryPane.NavigationInterceptor = OnPaneNavigating;
-                _ = SecondaryPane.NavigateAsync(PrimaryPane.CurrentPath);
-            }
-            IsDualPane = true;
-        }
-    }
+
 
     public void Dispose()
     {
         PrimaryPane.PropertyChanged -= PrimaryPane_PropertyChanged;
         PrimaryPane.Dispose();
-        SecondaryPane?.Dispose();
     }
 }

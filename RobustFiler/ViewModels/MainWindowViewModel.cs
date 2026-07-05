@@ -16,6 +16,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly IDialogService _dialogService;
 
     public ObservableCollection<TabItemViewModel> Tabs => SelectedTabGroup?.Tabs ?? new ObservableCollection<TabItemViewModel>();
+    public ObservableCollection<TabItemViewModel> SecondaryTabs => SelectedTabGroup?.SecondaryTabs ?? new ObservableCollection<TabItemViewModel>();
     public ObservableCollection<FavoriteItem> Favorites { get; } = new();
     public ObservableCollection<TabGroupViewModel> TabGroups { get; } = new();
 
@@ -32,7 +33,9 @@ public partial class MainWindowViewModel : ObservableObject
                     group.IsSelected = (group == _selectedTabGroup);
                 }
                 OnPropertyChanged(nameof(Tabs));
+                OnPropertyChanged(nameof(SecondaryTabs));
                 OnPropertyChanged(nameof(SelectedTab));
+                OnPropertyChanged(nameof(SecondarySelectedTab));
                 _ = SaveSessionAsync();
             }
         }
@@ -55,8 +58,28 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    public TabItemViewModel? SecondarySelectedTab
+    {
+        get => SelectedTabGroup?.SecondarySelectedTab;
+        set
+        {
+            if (SelectedTabGroup != null)
+            {
+                if (SelectedTabGroup.SecondarySelectedTab != value)
+                {
+                    SelectedTabGroup.SecondarySelectedTab = value;
+                    OnPropertyChanged();
+                    OnSelectedTabChanged(value);
+                }
+            }
+        }
+    }
+
     [ObservableProperty]
     private FavoriteItem? _selectedFavorite;
+
+    [ObservableProperty]
+    private bool _isSecondaryActive;
 
     public MainWindowViewModel(IFileService fileService, IDialogService dialogService)
     {
@@ -197,7 +220,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (value != null)
         {
-            ToggleDualPaneCommand.NotifyCanExecuteChanged();
+
             _ = SaveSessionAsync();
         }
     }
@@ -229,6 +252,20 @@ public partial class MainWindowViewModel : ObservableObject
                     else
                     {
                         groupVm.SelectedTab = groupVm.Tabs.FirstOrDefault();
+                    }
+
+                    foreach (var tabState in groupState.SecondaryTabs)
+                    {
+                        var tab = CreateTabFromState(tabState);
+                        groupVm.SecondaryTabs.Add(tab);
+                    }
+                    if (groupState.SecondarySelectedTabIndex >= 0 && groupState.SecondarySelectedTabIndex < groupVm.SecondaryTabs.Count)
+                    {
+                        groupVm.SecondarySelectedTab = groupVm.SecondaryTabs[groupState.SecondarySelectedTabIndex];
+                    }
+                    else
+                    {
+                        groupVm.SecondarySelectedTab = groupVm.SecondaryTabs.FirstOrDefault();
                     }
                     TabGroups.Add(groupVm);
                 }
@@ -280,14 +317,12 @@ public partial class MainWindowViewModel : ObservableObject
 
         var tab = new TabItemViewModel(primaryPane) { Header = tabState.Header, IsLocked = tabState.IsLocked };
         
-        if (tabState.IsDualPane)
+        if (tabState.IsDualPane && !string.IsNullOrEmpty(tabState.SecondaryPath))
         {
-            var secondaryPane = new FilePaneViewModel(_fileService, _dialogService);
-            if (!string.IsNullOrEmpty(tabState.SecondaryPath))
-            {
-                _ = secondaryPane.NavigateAsync(tabState.SecondaryPath);
-            }
-            tab.ToggleDualPane(secondaryPane);
+            // Old format: migrate to primary, let user manually arrange if they want it back, or just add it as a new tab.
+            // But since this method only creates one tab, the caller handles old IsDualPane differently?
+            // Actually, we can just let it go for now, or we can't easily add to SecondaryTabs from here.
+            // We'll ignore the old SecondaryPath in this simple migration to avoid complexity.
         }
         return tab;
     }
@@ -305,9 +340,14 @@ public partial class MainWindowViewModel : ObservableObject
                 Tabs = g.Tabs.Select(t => new TabState
                 {
                     Header = t.Header,
-                    IsDualPane = t.IsDualPane,
                     PrimaryPath = t.PrimaryPane.CurrentPath,
-                    SecondaryPath = t.SecondaryPane?.CurrentPath ?? string.Empty,
+                    IsLocked = t.IsLocked
+                }).ToList(),
+                SecondarySelectedTabIndex = g.SecondarySelectedTab != null ? g.SecondaryTabs.IndexOf(g.SecondarySelectedTab) : 0,
+                SecondaryTabs = g.SecondaryTabs.Select(t => new TabState
+                {
+                    Header = t.Header,
+                    PrimaryPath = t.PrimaryPane.CurrentPath,
                     IsLocked = t.IsLocked
                 }).ToList()
             }).ToList()
@@ -326,7 +366,14 @@ public partial class MainWindowViewModel : ObservableObject
             }
             else if (System.IO.Directory.Exists(value.Path))
             {
-                _ = SelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true, source: NavigationSource.Favorite);
+                if (IsSecondaryActive && SecondarySelectedTab != null)
+                {
+                    _ = SecondarySelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true, source: NavigationSource.Favorite);
+                }
+                else if (SelectedTab != null)
+                {
+                    _ = SelectedTab.PrimaryPane.NavigateToPathAsync(value.Path, bringToTop: true, source: NavigationSource.Favorite);
+                }
             }
             else if (System.IO.File.Exists(value.Path))
             {
@@ -406,25 +453,50 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     public void AddTab()
     {
+        AddTabToPane(false);
+    }
+
+    public void AddTabToPane(bool isSecondary)
+    {
         if (SelectedTabGroup == null) return;
         var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
         var tab = new TabItemViewModel(primaryPane);
-        SelectedTabGroup.Tabs.Add(tab);
-        SelectedTabGroup.SelectedTab = tab;
-        SelectedTab = tab; // This will trigger OnSelectedTabChanged and SaveSession
+        
+        if (isSecondary)
+        {
+            SelectedTabGroup.SecondaryTabs.Add(tab);
+            SelectedTabGroup.SecondarySelectedTab = tab;
+            SecondarySelectedTab = tab;
+        }
+        else
+        {
+            SelectedTabGroup.Tabs.Add(tab);
+            SelectedTabGroup.SelectedTab = tab;
+            SelectedTab = tab;
+        }
     }
 
     [RelayCommand]
     public void CloseTab(TabItemViewModel? tab)
     {
-        if (SelectedTabGroup == null) return;
-        if (tab != null && SelectedTabGroup.Tabs.Contains(tab) && !tab.IsLocked)
+        if (SelectedTabGroup == null || tab == null) return;
+        if (SelectedTabGroup.Tabs.Contains(tab) && !tab.IsLocked)
         {
             SelectedTabGroup.Tabs.Remove(tab);
             tab.Dispose();
             if (SelectedTabGroup.Tabs.Count == 0)
             {
-                AddTab();
+                AddTabToPane(false);
+            }
+            _ = SaveSessionAsync();
+        }
+        else if (SelectedTabGroup.SecondaryTabs.Contains(tab) && !tab.IsLocked)
+        {
+            SelectedTabGroup.SecondaryTabs.Remove(tab);
+            tab.Dispose();
+            if (SelectedTabGroup.SecondaryTabs.Count == 0)
+            {
+                AddTabToPane(true);
             }
             _ = SaveSessionAsync();
         }
@@ -434,10 +506,14 @@ public partial class MainWindowViewModel : ObservableObject
     public void CloseOtherTabs(TabItemViewModel? tab)
     {
         if (SelectedTabGroup == null || tab == null) return;
-        var tabsToRemove = SelectedTabGroup.Tabs.Where(t => t != tab && !t.IsLocked).ToList();
+        var collection = SelectedTabGroup.Tabs.Contains(tab) ? SelectedTabGroup.Tabs : 
+                         SelectedTabGroup.SecondaryTabs.Contains(tab) ? SelectedTabGroup.SecondaryTabs : null;
+        if (collection == null) return;
+
+        var tabsToRemove = collection.Where(t => t != tab && !t.IsLocked).ToList();
         foreach (var t in tabsToRemove)
         {
-            SelectedTabGroup.Tabs.Remove(t);
+            collection.Remove(t);
             t.Dispose();
         }
         _ = SaveSessionAsync();
@@ -447,13 +523,17 @@ public partial class MainWindowViewModel : ObservableObject
     public void CloseTabsToRight(TabItemViewModel? tab)
     {
         if (SelectedTabGroup == null || tab == null) return;
-        int index = SelectedTabGroup.Tabs.IndexOf(tab);
+        var collection = SelectedTabGroup.Tabs.Contains(tab) ? SelectedTabGroup.Tabs : 
+                         SelectedTabGroup.SecondaryTabs.Contains(tab) ? SelectedTabGroup.SecondaryTabs : null;
+        if (collection == null) return;
+
+        int index = collection.IndexOf(tab);
         if (index >= 0)
         {
-            var tabsToRemove = SelectedTabGroup.Tabs.Skip(index + 1).Where(t => !t.IsLocked).ToList();
+            var tabsToRemove = collection.Skip(index + 1).Where(t => !t.IsLocked).ToList();
             foreach (var t in tabsToRemove)
             {
-                SelectedTabGroup.Tabs.Remove(t);
+                collection.Remove(t);
                 t.Dispose();
             }
             _ = SaveSessionAsync();
@@ -461,37 +541,22 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void CloseAllTabs()
+    public void CloseAllTabs(TabItemViewModel? contextTab)
     {
-        if (SelectedTabGroup == null) return;
-        var tabsToRemove = SelectedTabGroup.Tabs.Where(t => !t.IsLocked).ToList();
+        if (SelectedTabGroup == null || contextTab == null) return;
+        var isSecondary = SelectedTabGroup.SecondaryTabs.Contains(contextTab);
+        var collection = isSecondary ? SelectedTabGroup.SecondaryTabs : SelectedTabGroup.Tabs;
+
+        var tabsToRemove = collection.Where(t => !t.IsLocked).ToList();
         foreach (var t in tabsToRemove)
         {
-            SelectedTabGroup.Tabs.Remove(t);
+            collection.Remove(t);
             t.Dispose();
         }
-        if (SelectedTabGroup.Tabs.Count == 0)
+        if (collection.Count == 0)
         {
-            AddTab();
+            AddTabToPane(isSecondary);
         }
         _ = SaveSessionAsync();
-    }
-
-    [RelayCommand]
-    public void ToggleDualPane()
-    {
-        if (SelectedTab != null)
-        {
-            if (!SelectedTab.IsDualPane)
-            {
-                var newPane = new FilePaneViewModel(_fileService, _dialogService);
-                SelectedTab.ToggleDualPane(newPane);
-            }
-            else
-            {
-                SelectedTab.ToggleDualPane(null);
-            }
-            _ = SaveSessionAsync();
-        }
     }
 }
