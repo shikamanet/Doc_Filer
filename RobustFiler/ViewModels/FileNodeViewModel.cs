@@ -107,4 +107,25 @@ public partial class FileNodeViewModel : ObservableObject
             IsLoaded = true;
         }
     }
+
+    public async Task ReloadAsync()
+    {
+        IsLoaded = false;
+        if (IsExpanded)
+        {
+            await LoadChildrenAsync();
+        }
+        else
+        {
+            var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? ((App)Microsoft.UI.Xaml.Application.Current).MainWindow?.DispatcherQueue;
+            dispatcherQueue?.TryEnqueue(() =>
+            {
+                Children.Clear();
+                if (IsDirectory)
+                {
+                    Children.Add(new FileNodeViewModel(_fileService) { Name = "Loading..." });
+                }
+            });
+        }
+    }
 }

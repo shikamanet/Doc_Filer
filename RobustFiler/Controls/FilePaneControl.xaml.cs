@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Extensions.DependencyInjection;
+using CommunityToolkit.Mvvm.Messaging;
 using RobustFiler.ViewModels;
 using RobustFiler.Services;
 
@@ -196,44 +197,205 @@ public sealed partial class FilePaneControl : UserControl
         var paths = ViewModel.SelectedItems.Select(x => x.FullPath).ToList();
         if (paths.Count > 0)
         {
-            args.Data.SetText("COPY|" + string.Join("\n", paths));
+            args.Data.SetText(string.Join("\n", paths));
+            args.AllowedOperations = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy | Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
         }
     }
 
     private void DataGrid_DragOver(object sender, Microsoft.UI.Xaml.DragEventArgs e)
     {
-        e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy | Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        if (e.Modifiers.HasFlag(Windows.ApplicationModel.DataTransfer.DragDrop.DragDropModifiers.Control))
+        {
+            e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+            e.DragUIOverride.Caption = "コピー";
+        }
+        else
+        {
+            e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+            e.DragUIOverride.Caption = "移動";
+        }
     }
 
     private async void DataGrid_Drop(object sender, Microsoft.UI.Xaml.DragEventArgs e)
     {
+        await HandleDropAsync(e, ViewModel.CurrentPath);
+    }
+
+    private void TreeView_DragItemsStarting(TreeView sender, TreeViewDragItemsStartingEventArgs args)
+    {
+        var paths = args.Items.OfType<FileNodeViewModel>().Select(x => x.FullPath).ToList();
+        if (paths.Count > 0)
+        {
+            args.Data.SetText("INTERNAL_TREE|" + string.Join("\n", paths));
+            args.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy | Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        }
+    }
+
+    private async void FolderTree_DragItemsCompleted(TreeView sender, TreeViewDragItemsCompletedEventArgs args)
+    {
+        if (args.DropResult == Windows.ApplicationModel.DataTransfer.DataPackageOperation.None) return;
+
+        var draggedNodes = args.Items.OfType<FileNodeViewModel>().ToList();
+        if (draggedNodes.Count == 0) return;
+
+        var newParentNode = args.NewParentItem as FileNodeViewModel;
+        string targetPath = newParentNode?.FullPath ?? ViewModel.CurrentPath;
+
+        if (System.IO.File.Exists(targetPath))
+        {
+            targetPath = System.IO.Path.GetDirectoryName(targetPath) ?? targetPath;
+        }
+
+        var service = ((App)Microsoft.UI.Xaml.Application.Current).Services?.GetService<Services.IFileService>();
+        if (service != null && ViewModel != null)
+        {
+            var sourcePaths = draggedNodes.Select(x => x.FullPath).ToList();
+            try
+            {
+                if (args.DropResult == Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy)
+                {
+                    await service.CopyFilesAsync(sourcePaths, targetPath);
+                }
+                else if (args.DropResult == Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move)
+                {
+                    await service.MoveFilesAsync(sourcePaths, targetPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                var dialogService = ((App)Microsoft.UI.Xaml.Application.Current).Services?.GetService<Services.IDialogService>();
+                if (dialogService != null)
+                {
+                    await dialogService.ShowErrorAsync("ファイル操作エラー", ex);
+                }
+            }
+            finally
+            {
+                var sourceDirs = sourcePaths.Select(System.IO.Path.GetDirectoryName).Where(x => x != null).Cast<string>().Distinct();
+                var affected = sourceDirs.Concat(new[] { targetPath }).ToArray();
+                CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(affected));
+            }
+        }
+    }
+
+    private void TreeView_DragOver(object sender, Microsoft.UI.Xaml.DragEventArgs e)
+    {
+        // For dragging from OUTSIDE into the TreeView
+        if (e.Modifiers.HasFlag(Windows.ApplicationModel.DataTransfer.DragDrop.DragDropModifiers.Control))
+        {
+            e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy;
+            e.DragUIOverride.Caption = "コピー";
+        }
+        else
+        {
+            e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+            e.DragUIOverride.Caption = "移動";
+        }
+    }
+
+    private FileNodeViewModel? GetNodeFromElement(Microsoft.UI.Xaml.DependencyObject? element)
+    {
+        while (element != null)
+        {
+            if (element is Microsoft.UI.Xaml.FrameworkElement fe && fe.DataContext is FileNodeViewModel node)
+            {
+                return node;
+            }
+            element = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetParent(element);
+        }
+        return null;
+    }
+
+    private async void TreeView_Drop(object sender, Microsoft.UI.Xaml.DragEventArgs e)
+    {
+        // For external drops (e.g. from Explorer to TreeView)
+        // Internal drops will be handled by TreeView automatically and trigger DragItemsCompleted
         if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text))
         {
             try
             {
                 var text = await e.DataView.GetTextAsync();
-                if (string.IsNullOrEmpty(text)) return;
-                var parts = text.Split('|', 2);
-                if (parts.Length != 2) return;
-                var op = parts[0];
-                var paths = parts[1].Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                if (text.StartsWith("INTERNAL_TREE|"))
+                {
+                    // Ignore internal drag drops since DragItemsCompleted will handle them
+                    return;
+                }
+            }
+            catch { }
+        }
 
+        string targetPath = ViewModel.CurrentPath;
+        var node = GetNodeFromElement(e.OriginalSource as Microsoft.UI.Xaml.DependencyObject);
+        if (node != null)
+        {
+            targetPath = node.FullPath;
+        }
+
+        if (System.IO.File.Exists(targetPath))
+        {
+            targetPath = System.IO.Path.GetDirectoryName(targetPath) ?? targetPath;
+        }
+
+        await HandleDropAsync(e, targetPath);
+    }
+
+    private async Task HandleDropAsync(Microsoft.UI.Xaml.DragEventArgs e, string targetPath)
+    {
+        var paths = new List<string>();
+        try
+        {
+            if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            {
+                var items = await e.DataView.GetStorageItemsAsync();
+                foreach (var item in items)
+                {
+                    paths.Add(item.Path);
+                }
+            }
+            else if (e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text))
+            {
+                var text = await e.DataView.GetTextAsync();
+                if (!string.IsNullOrEmpty(text))
+                {
+                    if (text.StartsWith("COPY|") || text.StartsWith("MOVE|"))
+                    {
+                        text = text.Substring(5);
+                    }
+                    paths.AddRange(text.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+                }
+            }
+
+            if (paths.Count > 0)
+            {
                 var service = ((App)Microsoft.UI.Xaml.Application.Current).Services?.GetService<IFileService>();
                 if (service != null && ViewModel != null)
                 {
-                    if (op == "COPY")
+                    if (e.AcceptedOperation == Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy)
                     {
-                        await service.CopyFilesAsync(paths, ViewModel.CurrentPath);
+                        await service.CopyFilesAsync(paths, targetPath);
                     }
-                    else if (op == "MOVE")
+                    else if (e.AcceptedOperation == Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move)
                     {
-                        await service.MoveFilesAsync(paths, ViewModel.CurrentPath);
+                        await service.MoveFilesAsync(paths, targetPath);
                     }
                 }
             }
-            catch
+        }
+        catch (Exception ex)
+        {
+            var dialogService = ((App)Microsoft.UI.Xaml.Application.Current).Services?.GetService<Services.IDialogService>();
+            if (dialogService != null)
             {
-                // Ignore drop errors
+                await dialogService.ShowErrorAsync("ファイル操作エラー", ex);
+            }
+        }
+        finally
+        {
+            if (paths.Count > 0)
+            {
+                var sourceDirs = paths.Select(System.IO.Path.GetDirectoryName).Where(x => x != null).Cast<string>().Distinct();
+                var affected = sourceDirs.Concat(new[] { targetPath }).ToArray();
+                CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(affected));
             }
         }
     }

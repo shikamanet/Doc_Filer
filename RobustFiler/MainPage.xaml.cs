@@ -28,6 +28,11 @@ public sealed partial class MainPage : Page
         ViewModel.AddTabToPane(isSecondary: true);
     }
 
+    private void GroupsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+    {
+        _ = ViewModel.SaveSessionAsync();
+    }
+
     private void PrimaryTabView_GotFocus(object sender, RoutedEventArgs e)
     {
         ViewModel.IsSecondaryActive = false;
@@ -124,13 +129,14 @@ public sealed partial class MainPage : Page
 
     private void TabView_TabDragStarting(TabView sender, TabViewTabDragStartingEventArgs args)
     {
-        args.Data.Properties.Add("TabItem", args.Tab);
+        args.Data.Properties.Add("TabItemVM", args.Item);
         args.Data.Properties.Add("SourceTabView", sender);
+        args.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
     }
 
     private void TabView_TabStripDragOver(object sender, DragEventArgs e)
     {
-        if (e.DataView.Properties.ContainsKey("TabItem"))
+        if (e.DataView.Properties.ContainsKey("TabItemVM"))
         {
             e.AcceptedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
         }
@@ -138,7 +144,9 @@ public sealed partial class MainPage : Page
 
     private void TabView_TabStripDrop(object sender, DragEventArgs e)
     {
-        if (sender is TabView targetTabView && e.DataView.Properties.TryGetValue("TabItem", out var tabObj) && tabObj is TabViewItem tabItem && tabItem.DataContext is TabItemViewModel tabVM)
+        if (sender is TabView targetTabView && 
+            e.DataView.Properties.TryGetValue("TabItemVM", out var tabObj) && 
+            tabObj is TabItemViewModel tabVM)
         {
             if (e.DataView.Properties.TryGetValue("SourceTabView", out var sourceObj) && sourceObj is TabView sourceTabView)
             {

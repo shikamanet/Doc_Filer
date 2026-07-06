@@ -156,7 +156,10 @@
                               ItemsSource="{x:Bind ViewModel.TabGroups, Mode=OneWay}"
                               SelectedItem="{x:Bind ViewModel.SelectedTabGroup, Mode=TwoWay}"
                               SelectionMode="Single"
-                              ShowsScrollingPlaceholders="False">
+                              ShowsScrollingPlaceholders="False"
+                              CanReorderItems="True"
+                              AllowDrop="True"
+                              DragItemsCompleted="GroupsListView_DragItemsCompleted">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="viewmodels:TabGroupViewModel">
                                 <StackPanel Orientation="Horizontal" Spacing="8" Padding="4" Background="Transparent">

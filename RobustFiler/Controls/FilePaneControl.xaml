@@ -60,7 +60,13 @@
 
             <TreeView x:Name="FolderTree" Grid.Column="0" ItemsSource="{x:Bind ViewModel.RootDrives, Mode=OneWay}"
                       ItemInvoked="TreeView_ItemInvoked"
-                      DoubleTapped="FolderTree_DoubleTapped">
+                      DoubleTapped="FolderTree_DoubleTapped"
+                      CanDragItems="True"
+                      AllowDrop="True"
+                      DragItemsStarting="TreeView_DragItemsStarting"
+                      DragItemsCompleted="FolderTree_DragItemsCompleted"
+                      DragOver="TreeView_DragOver"
+                      Drop="TreeView_Drop">
                 <TreeView.ItemContainerStyle>
                     <Style TargetType="TreeViewItem">
                         <Setter Property="MinHeight" Value="24" />

@@ -327,7 +327,7 @@ public partial class MainWindowViewModel : ObservableObject
         return tab;
     }
 
-    private async Task SaveSessionAsync()
+    public async Task SaveSessionAsync()
     {
         var session = new SessionState
         {

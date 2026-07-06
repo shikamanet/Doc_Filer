@@ -243,57 +243,44 @@ public class LocalFileService : IFileService
         return string.Empty;
     }
 
-    public async Task<bool> CopyFilesAsync(IEnumerable<string> sourcePaths, string destinationPath)
+    public async Task CopyFilesAsync(IEnumerable<string> sourcePaths, string destinationPath)
     {
-        return await Task.Run(() =>
+        await Task.Run(() =>
         {
-            try
+            foreach (var path in sourcePaths)
             {
-                foreach (var path in sourcePaths)
+                if (File.Exists(path))
                 {
-                    if (File.Exists(path))
-                    {
-                        var dest = Path.Combine(destinationPath, Path.GetFileName(path));
-                        File.Copy(path, dest, overwrite: true);
-                    }
-                    else if (Directory.Exists(path))
-                    {
-                        var dest = Path.Combine(destinationPath, Path.GetFileName(path));
-                        CopyDirectory(path, dest);
-                    }
+                    var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                    File.Copy(path, dest, overwrite: true);
                 }
-                return true;
-            }
-            catch
-            {
-                return false;
+                else if (Directory.Exists(path))
+                {
+                    var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                    if (string.Equals(path, dest, StringComparison.OrdinalIgnoreCase)) continue; // ignore
+                    CopyDirectory(path, dest);
+                }
             }
         });
     }
 
-    public async Task<bool> MoveFilesAsync(IEnumerable<string> sourcePaths, string destinationPath)
+    public async Task MoveFilesAsync(IEnumerable<string> sourcePaths, string destinationPath)
     {
-        return await Task.Run(() =>
+        await Task.Run(() =>
         {
-            try
+            foreach (var path in sourcePaths)
             {
-                foreach (var path in sourcePaths)
+                var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                if (string.Equals(path, dest, StringComparison.OrdinalIgnoreCase)) continue; // skip if moving to same location
+
+                if (File.Exists(path))
                 {
-                    var dest = Path.Combine(destinationPath, Path.GetFileName(path));
-                    if (File.Exists(path))
-                    {
-                        File.Move(path, dest, overwrite: true);
-                    }
-                    else if (Directory.Exists(path))
-                    {
-                        Directory.Move(path, dest);
-                    }
+                    File.Move(path, dest, overwrite: true);
                 }
-                return true;
-            }
-            catch
-            {
-                return false;
+                else if (Directory.Exists(path))
+                {
+                    Directory.Move(path, dest);
+                }
             }
         });
     }

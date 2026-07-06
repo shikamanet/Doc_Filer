@@ -45,6 +45,44 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         _dialogService = dialogService;
         _fileService.DirectoryChanged += OnDirectoryChanged;
         InitializeDrives();
+
+        CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Register<RobustFiler.Messages.FileSystemChangedMessage>(this, (r, m) =>
+        {
+            var dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
+            dispatcherQueue?.TryEnqueue(() =>
+            {
+                if (m.AffectedPaths == null || m.AffectedPaths.Length == 0 || m.AffectedPaths.Contains(CurrentPath, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!string.IsNullOrEmpty(CurrentPath))
+                    {
+                        _ = ReloadCurrentFolderAsync();
+                    }
+                }
+
+                if (m.AffectedPaths != null)
+                {
+                    foreach (var drive in RootDrives)
+                    {
+                        RefreshTreeNodes(drive, m.AffectedPaths);
+                    }
+                }
+            });
+        });
+    }
+
+    private void RefreshTreeNodes(FileNodeViewModel node, string[] affectedPaths)
+    {
+        if (affectedPaths.Contains(node.FullPath, StringComparer.OrdinalIgnoreCase))
+        {
+            _ = node.ReloadAsync();
+        }
+        else if (node.IsExpanded)
+        {
+            foreach (var child in node.Children)
+            {
+                RefreshTreeNodes(child, affectedPaths);
+            }
+        }
     }
 
     private void OnDirectoryChanged(object? sender, string path)
@@ -52,9 +90,9 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         if (CurrentPath == path)
         {
             var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
-            dispatcherQueue?.TryEnqueue(async () =>
+            dispatcherQueue?.TryEnqueue(() =>
             {
-                await LoadFolderContentCoreAsync(path);
+                CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(path));
             });
         }
     }
@@ -109,6 +147,12 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     {
         if (string.IsNullOrWhiteSpace(path) || CurrentPath == path) return;
         await NavigateInternalAsync(path, NavigationSource.Other, false, false);
+    }
+
+    public async Task ReloadCurrentFolderAsync()
+    {
+        if (string.IsNullOrEmpty(CurrentPath)) return;
+        await LoadFolderContentCoreAsync(CurrentPath);
     }
 
     public async Task NavigateToPathAsync(string path, bool bringToTop, NavigationSource source = NavigationSource.Other)
@@ -323,6 +367,10 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             {
                 await _dialogService.ShowErrorAsync("エラー", new Exception("フォルダーを作成できませんでした。"));
             }
+            else
+            {
+                CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(CurrentPath));
+            }
         }
     }
 
@@ -338,6 +386,10 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             {
                 await _dialogService.ShowErrorAsync("エラー", new Exception("名前を変更できませんでした。"));
             }
+            else
+            {
+                CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(CurrentPath));
+            }
         }
     }
 
@@ -348,16 +400,22 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         if (await _dialogService.ShowConfirmationAsync("削除の確認", $"{SelectedItems.Count} 個の項目をごみ箱に移動しますか？"))
         {
             var nodesToDelete = SelectedItems.ToList();
+            bool deletedAny = false;
             foreach (var node in nodesToDelete)
             {
                 if (await _fileService.DeleteToRecycleBinAsync(node.FullPath))
                 {
                     CurrentFolderItems.Remove(node);
+                    deletedAny = true;
                 }
                 else
                 {
                     await _dialogService.ShowErrorAsync("エラー", new Exception($"'{node.Name}' を削除できませんでした。"));
                 }
+            }
+            if (deletedAny)
+            {
+                CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(CurrentPath));
             }
             SelectedItems.Clear();
         }
@@ -391,6 +449,7 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         var dataPackageView = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
         if (dataPackageView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text))
         {
+            string[]? paths = null;
             try
             {
                 var text = await dataPackageView.GetTextAsync();
@@ -398,7 +457,7 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
                 var parts = text.Split('|', 2);
                 if (parts.Length != 2) return;
                 var op = parts[0];
-                var paths = parts[1].Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                paths = parts[1].Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
                 if (op == "COPY")
                 {
@@ -412,7 +471,16 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             }
             catch (Exception ex)
             {
-                await _dialogService.ShowErrorAsync("エラー", ex);
+                await _dialogService.ShowErrorAsync("ファイル操作エラー", ex);
+            }
+            finally
+            {
+                if (paths != null && paths.Length > 0)
+                {
+                    var sourceDirs = paths.Select(System.IO.Path.GetDirectoryName).Where(x => x != null).Cast<string>().Distinct();
+                    var affected = sourceDirs.Concat(new[] { CurrentPath }).ToArray();
+                    CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(affected));
+                }
             }
         }
     }
