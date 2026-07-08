@@ -9,6 +9,10 @@ public class TabState
     public bool IsDualPane { get; set; }
     public string SecondaryPath { get; set; } = string.Empty;
     public bool IsLocked { get; set; }
+    public List<string> PrimaryExpandedPaths { get; set; } = new();
+    public List<string> SecondaryExpandedPaths { get; set; } = new();
+    public string PrimaryTreeRootPath { get; set; } = string.Empty;
+    public string SecondaryTreeRootPath { get; set; } = string.Empty;
 }
 
 public class TabGroupState

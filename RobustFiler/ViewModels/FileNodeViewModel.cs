@@ -94,17 +94,20 @@ public partial class FileNodeViewModel : ObservableObject
     {
         if (IsLoaded || !IsDirectory) return;
 
+        var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? ((App)Microsoft.UI.Xaml.Application.Current).MainWindow?.DispatcherQueue;
         var items = await _fileService.GetFilesAsync(FullPath);
 
-        var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         if (dispatcherQueue != null)
         {
-            Children.Clear();
-            foreach (var item in items)
+            dispatcherQueue.TryEnqueue(() =>
             {
-                Children.Add(new FileNodeViewModel(item, _fileService));
-            }
-            IsLoaded = true;
+                Children.Clear();
+                foreach (var item in items)
+                {
+                    Children.Add(new FileNodeViewModel(item, _fileService));
+                }
+                IsLoaded = true;
+            });
         }
     }
 

@@ -26,17 +26,19 @@
         </Grid.RowDefinitions>
 
         <!-- Address Bar Area -->
-        <Grid Grid.Row="0" Padding="8" Background="{ThemeResource SystemControlBackgroundChromeMediumBrush}">
+        <Grid Grid.Row="0" Padding="4,2" Background="{ThemeResource SystemControlBackgroundChromeMediumBrush}">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Button Grid.Column="0" FontFamily="Segoe Fluent Icons" Content="&#xE72B;" Command="{x:Bind ViewModel.GoBackCommand}" ToolTipService.ToolTip="戻る" Margin="0,0,4,0"/>
-            <Button Grid.Column="1" FontFamily="Segoe Fluent Icons" Content="&#xE72A;" Command="{x:Bind ViewModel.GoForwardCommand}" ToolTipService.ToolTip="進む" Margin="0,0,8,0"/>
+            <Button Grid.Column="0" FontFamily="Segoe Fluent Icons" Content="&#xE72B;" Command="{x:Bind ViewModel.GoBackCommand}" ToolTipService.ToolTip="戻る" Margin="0,0,2,0" Width="28" Height="28" CornerRadius="14" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+            <Button Grid.Column="1" FontFamily="Segoe Fluent Icons" Content="&#xE72A;" Command="{x:Bind ViewModel.GoForwardCommand}" ToolTipService.ToolTip="進む" Margin="0,0,2,0" Width="28" Height="28" CornerRadius="14" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+            <Button Grid.Column="2" FontFamily="Segoe Fluent Icons" Content="&#xE11C;" Command="{x:Bind ViewModel.GoUpCommand}" ToolTipService.ToolTip="上の階層へ" Margin="0,0,8,0" Width="28" Height="28" CornerRadius="14" Padding="0" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
             
-            <Border Grid.Column="2" x:Name="AddressBarBorder" Background="{ThemeResource ControlFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Tapped="AddressBarBorder_Tapped" VerticalAlignment="Stretch" MinHeight="32">
+            <Border Grid.Column="3" x:Name="AddressBarBorder" Background="{ThemeResource ControlFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Tapped="AddressBarBorder_Tapped" VerticalAlignment="Stretch" MinHeight="24">
                 <Grid>
                     <BreadcrumbBar x:Name="Breadcrumb" ItemsSource="{x:Bind ViewModel.BreadcrumbItems, Mode=OneWay}" ItemClicked="BreadcrumbBar_ItemClicked" VerticalAlignment="Center" Margin="4,0,4,0" Visibility="Visible">
                         <BreadcrumbBar.ItemTemplate>
@@ -66,7 +68,9 @@
                       DragItemsStarting="TreeView_DragItemsStarting"
                       DragItemsCompleted="FolderTree_DragItemsCompleted"
                       DragOver="TreeView_DragOver"
-                      Drop="TreeView_Drop">
+                      Drop="TreeView_Drop"
+                      Expanding="FolderTree_Expanding"
+                      Collapsed="FolderTree_Collapsed">
                 <TreeView.ItemContainerStyle>
                     <Style TargetType="TreeViewItem">
                         <Setter Property="MinHeight" Value="24" />
@@ -87,7 +91,7 @@
                             <StackPanel Orientation="Horizontal" Spacing="4" Padding="4,0" Background="Transparent" CornerRadius="4"
                                         PointerEntered="TreeItem_PointerEntered" PointerExited="TreeItem_PointerExited">
                                 <Image Source="{x:Bind FileIcon, Mode=OneWay}" Width="16" Height="16" VerticalAlignment="Center" />
-                                <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center" />
+                                <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center" FontSize="12" />
                             </StackPanel>
                         </TreeViewItem>
                     </DataTemplate>
@@ -106,6 +110,7 @@
                 </Grid.ContextFlyout>
 
                 <controls:DataGrid x:Name="FileListGrid"
+                                   FontSize="12"
                                    ItemsSource="{x:Bind ViewModel.CurrentFolderItems, Mode=OneWay}" 
                                    AutoGenerateColumns="False" 
                                    Sorting="DataGrid_Sorting"
@@ -121,8 +126,31 @@
                                    Drop="DataGrid_Drop"
                                    GridLinesVisibility="None"
                                    RowHeight="24">
+                    <controls:DataGrid.Resources>
+                        <SolidColorBrush x:Key="DataGridCurrencyVisualPrimaryBrush" Color="Transparent" />
+                        <SolidColorBrush x:Key="DataGridCellFocusVisualPrimaryBrush" Color="Transparent" />
+                        <SolidColorBrush x:Key="DataGridRowFocusVisualPrimaryBrush" Color="Transparent" />
+                        <SolidColorBrush x:Key="DataGridCellFocusVisualSecondaryBrush" Color="Transparent" />
+                        <SolidColorBrush x:Key="DataGridRowFocusVisualSecondaryBrush" Color="Transparent" />
+                    </controls:DataGrid.Resources>
+                    <controls:DataGrid.CellStyle>
+                        <Style TargetType="controls:DataGridCell">
+                            <Setter Property="Padding" Value="4,0" />
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="MinHeight" Value="20" />
+                            <Setter Property="MaxHeight" Value="24" />
+                            <Setter Property="Height" Value="24" />
+                            <Setter Property="FontSize" Value="12" />
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="UseSystemFocusVisuals" Value="False" />
+                            <Setter Property="FocusVisualPrimaryThickness" Value="0" />
+                        </Style>
+                    </controls:DataGrid.CellStyle>
                     <controls:DataGrid.ColumnHeaderStyle>
                         <Style TargetType="primitives:DataGridColumnHeader">
+                            <Setter Property="MinHeight" Value="24" />
+                            <Setter Property="Padding" Value="4,0" />
+                            <Setter Property="FontSize" Value="12" />
                             <Setter Property="ContextFlyout">
                                 <Setter.Value>
                                     <MenuFlyout Opening="ColumnMenu_Opening">
@@ -136,6 +164,13 @@
                     </controls:DataGrid.ColumnHeaderStyle>
                     <controls:DataGrid.RowStyle>
                         <Style TargetType="controls:DataGridRow">
+                            <Setter Property="Margin" Value="0" />
+                            <Setter Property="MinHeight" Value="20" />
+                            <Setter Property="MaxHeight" Value="24" />
+                            <Setter Property="Height" Value="24" />
+                            <Setter Property="BorderThickness" Value="0" />
+                            <Setter Property="UseSystemFocusVisuals" Value="False" />
+                            <Setter Property="FocusVisualPrimaryThickness" Value="0" />
                             <Setter Property="ContextFlyout">
                                 <Setter.Value>
                                     <MenuFlyout>
@@ -156,15 +191,15 @@
                         <controls:DataGridTemplateColumn Header="名前" Tag="Name">
                             <controls:DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="viewmodels:FileNodeViewModel">
-                                    <StackPanel Orientation="Horizontal" Spacing="6" Padding="2,0" Background="Transparent">
-                                        <Image Source="{x:Bind FileIcon, Mode=OneWay}" Width="16" Height="16" VerticalAlignment="Center" />
-                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6" Padding="0" Background="Transparent">
+                                        <Image Source="{x:Bind FileIcon, Mode=OneWay}" Width="16" Height="16" VerticalAlignment="Center" Margin="0" />
+                                        <TextBlock Text="{x:Bind Name, Mode=OneWay}" VerticalAlignment="Center" FontSize="12" Margin="0" Padding="0" />
                                     </StackPanel>
                                 </DataTemplate>
                             </controls:DataGridTemplateColumn.CellTemplate>
                         </controls:DataGridTemplateColumn>
-                        <controls:DataGridTextColumn Header="更新日時" Tag="DateModified" Binding="{Binding DateModified}" />
-                        <controls:DataGridTextColumn Header="サイズ" Tag="Size" Binding="{Binding RawSize, Converter={StaticResource FileSizeConverter}}" />
+                        <controls:DataGridTextColumn Header="更新日時" Tag="DateModified" Binding="{Binding DateModified}" FontSize="12" />
+                        <controls:DataGridTextColumn Header="サイズ" Tag="Size" Binding="{Binding RawSize, Converter={StaticResource FileSizeConverter}}" FontSize="12" />
                     </controls:DataGrid.Columns>
                 </controls:DataGrid>
             </Grid>

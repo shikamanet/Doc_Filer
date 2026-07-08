@@ -56,7 +56,6 @@ public sealed partial class FilePaneControl : UserControl
         {
             if (node.IsDirectory)
             {
-                node.IsExpanded = !node.IsExpanded;
                 _ = ViewModel.NavigateCommand.ExecuteAsync(node.FullPath);
             }
         }
@@ -228,6 +227,24 @@ public sealed partial class FilePaneControl : UserControl
         {
             args.Data.SetText("INTERNAL_TREE|" + string.Join("\n", paths));
             args.Data.RequestedOperation = Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy | Windows.ApplicationModel.DataTransfer.DataPackageOperation.Move;
+        }
+    }
+
+    private void FolderTree_Expanding(TreeView sender, TreeViewExpandingEventArgs args)
+    {
+        if (args.Item is FileNodeViewModel node)
+        {
+            node.IsExpanded = true;
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.SessionChangedMessage());
+        }
+    }
+
+    private void FolderTree_Collapsed(TreeView sender, TreeViewCollapsedEventArgs args)
+    {
+        if (args.Item is FileNodeViewModel node)
+        {
+            node.IsExpanded = false;
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.SessionChangedMessage());
         }
     }
 

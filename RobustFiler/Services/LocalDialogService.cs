@@ -59,10 +59,40 @@ public class LocalDialogService : IDialogService
         var root = GetXamlRoot();
         if (root == null) return;
 
+        var messageBuilder = new System.Text.StringBuilder();
+        if (ex is AggregateException aggEx)
+        {
+            foreach (var inner in aggEx.Flatten().InnerExceptions)
+            {
+                messageBuilder.AppendLine("- " + inner.Message);
+            }
+        }
+        else
+        {
+            messageBuilder.AppendLine(ex.Message);
+            if (ex.InnerException != null)
+            {
+                messageBuilder.AppendLine($"\n詳細: {ex.InnerException.Message}");
+            }
+        }
+
+        var scrollViewer = new ScrollViewer
+        {
+            Content = new TextBlock
+            {
+                Text = messageBuilder.ToString().TrimEnd(),
+                TextWrapping = Microsoft.UI.Xaml.TextWrapping.Wrap,
+                IsTextSelectionEnabled = true
+            },
+            MaxHeight = 300,
+            VerticalScrollMode = ScrollMode.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+        };
+
         var dialog = new ContentDialog
         {
             Title = title,
-            Content = ex.Message,
+            Content = scrollViewer,
             CloseButtonText = "OK",
             XamlRoot = root
         };

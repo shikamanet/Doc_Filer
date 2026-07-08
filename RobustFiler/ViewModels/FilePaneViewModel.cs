@@ -24,12 +24,15 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     public event EventHandler<(FileNodeViewModel Node, bool BringToTop)>? NodeSelectedRequest;
     private readonly IFileService _fileService;
     private readonly IDialogService _dialogService;
-    private readonly Stack<string> _backHistory = new();
-    private readonly Stack<string> _forwardHistory = new();
+    private readonly Stack<(string Path, string TreeRootPath, List<string> ExpandedPaths)> _backHistory = new();
+    private readonly Stack<(string Path, string TreeRootPath, List<string> ExpandedPaths)> _forwardHistory = new();
     private bool _isNavigating;
 
     [ObservableProperty]
     private string _currentPath = string.Empty;
+
+    [ObservableProperty]
+    private string _treeRootPath = string.Empty;
 
     public ObservableCollection<FileNodeViewModel> RootDrives { get; } = new();
     
@@ -121,9 +124,9 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     {
         if (CanGoBack())
         {
-            _forwardHistory.Push(CurrentPath);
+            _forwardHistory.Push((CurrentPath, TreeRootPath, GetExpandedPaths()));
             var prev = _backHistory.Pop();
-            _ = NavigateInternalAsync(prev, NavigationSource.History, isHistoryNavigation: true);
+            RestoreHistoryState(prev);
         }
     }
 
@@ -134,13 +137,84 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     {
         if (CanGoForward())
         {
-            _backHistory.Push(CurrentPath);
+            _backHistory.Push((CurrentPath, TreeRootPath, GetExpandedPaths()));
             var next = _forwardHistory.Pop();
-            _ = NavigateInternalAsync(next, NavigationSource.History, isHistoryNavigation: true);
+            RestoreHistoryState(next);
         }
     }
 
     private bool CanGoForward() => _forwardHistory.Count > 0;
+
+    private void RestoreHistoryState((string Path, string TreeRootPath, List<string> ExpandedPaths) state)
+    {
+        if (TreeRootPath != state.TreeRootPath)
+        {
+            if (string.IsNullOrEmpty(state.TreeRootPath))
+            {
+                TreeRootPath = string.Empty;
+                RootDrives.Clear();
+                InitializeDrives();
+            }
+            else
+            {
+                ApplyNavigationSourceEffects(state.TreeRootPath, NavigationSource.TreeView, false);
+            }
+        }
+
+        var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
+        dispatcherQueue?.TryEnqueue(async () =>
+        {
+            await RestoreExpandedPathsAsync(state.ExpandedPaths);
+        });
+        
+        _ = NavigateInternalAsync(state.Path, NavigationSource.History, isHistoryNavigation: true);
+    }
+
+    private List<string> GetExpandedPaths()
+    {
+        var paths = new List<string>();
+        GetExpandedPathsRecursive(RootDrives, paths);
+        return paths;
+    }
+
+    private void GetExpandedPathsRecursive(IEnumerable<FileNodeViewModel> nodes, List<string> paths)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.IsExpanded)
+            {
+                paths.Add(node.FullPath);
+                GetExpandedPathsRecursive(node.Children, paths);
+            }
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanGoUp))]
+    private void GoUp()
+    {
+        if (CanGoUp())
+        {
+            var parent = System.IO.Directory.GetParent(CurrentPath);
+            if (parent != null)
+            {
+                _ = NavigateInternalAsync(parent.FullName, NavigationSource.Other, false, false);
+            }
+        }
+    }
+
+    private bool CanGoUp()
+    {
+        if (string.IsNullOrEmpty(CurrentPath)) return false;
+        try
+        {
+            var parent = System.IO.Directory.GetParent(CurrentPath);
+            return parent != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     [RelayCommand]
     public async Task NavigateAsync(string? path)
@@ -180,7 +254,7 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             {
                 if (!isHistoryNavigation && !string.IsNullOrEmpty(CurrentPath))
                 {
-                    _backHistory.Push(CurrentPath);
+                    _backHistory.Push((CurrentPath, TreeRootPath, GetExpandedPaths()));
                     _forwardHistory.Clear();
                 }
 
@@ -202,12 +276,10 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
             _isNavigating = false;
             GoBackCommand.NotifyCanExecuteChanged();
             GoForwardCommand.NotifyCanExecuteChanged();
+            GoUpCommand.NotifyCanExecuteChanged();
             CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.SessionChangedMessage());
             
-            if (!isHistoryNavigation)
-            {
-                ApplyNavigationSourceEffects(path, source, bringToTop);
-            }
+            ApplyNavigationSourceEffects(path, source, bringToTop);
         }
     }
 
@@ -217,21 +289,24 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
 
         if (source == NavigationSource.Favorite || source == NavigationSource.Breadcrumb || source == NavigationSource.TreeView)
         {
+            TreeRootPath = path;
             RootDrives.Clear();
+            var dirInfo = new DirectoryInfo(path);
+            var folderName = dirInfo.Parent == null ? path : dirInfo.Name;
+            
             var item = new FileItem
             {
-                Name = Path.GetFileName(path),
+                Name = folderName,
                 FullPath = path,
                 IsDirectory = true,
                 DateModified = DateTime.MinValue
             };
-            if (string.IsNullOrEmpty(item.Name)) item.Name = path; // Handle drive roots like "C:\"
             var rootNode = new FileNodeViewModel(item, _fileService);
             rootNode.IsExpanded = true;
             RootDrives.Add(rootNode);
             _ = SelectNodeInTreeAsync(path, bringToTop);
         }
-        else if (source == NavigationSource.DataGrid)
+        else
         {
             _ = SelectNodeInTreeAsync(path, bringToTop);
         }
@@ -240,13 +315,36 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     private async Task SelectNodeInTreeAsync(string targetPath, bool bringToTop)
     {
         var node = await FindAndExpandNodeAsync(RootDrives, targetPath);
+
+        if (node == null && !string.IsNullOrEmpty(TreeRootPath))
+        {
+            TreeRootPath = string.Empty;
+            InitializeDrives();
+            node = await FindAndExpandNodeAsync(RootDrives, targetPath);
+        }
+
         if (node != null)
         {
             var dispatcherQueue = DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
             dispatcherQueue?.TryEnqueue(() =>
             {
+                node.IsExpanded = true;
                 NodeSelectedRequest?.Invoke(this, (node, bringToTop));
             });
+        }
+    }
+
+    public async Task RestoreExpandedPathsAsync(List<string> paths)
+    {
+        if (paths == null || paths.Count == 0) return;
+        
+        foreach (var path in paths.OrderBy(p => p.Length))
+        {
+            var node = await FindAndExpandNodeAsync(RootDrives, path);
+            if (node != null)
+            {
+                node.IsExpanded = true;
+            }
         }
     }
 
@@ -256,12 +354,12 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
 
         foreach (var node in nodes)
         {
-            if (string.Equals(node.FullPath, targetPath, StringComparison.OrdinalIgnoreCase))
+            string nodeNormalized = node.FullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+            if (string.Equals(nodeNormalized, targetNormalized, StringComparison.OrdinalIgnoreCase))
             {
                 return node;
             }
-
-            string nodeNormalized = node.FullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
             if (targetNormalized.StartsWith(nodeNormalized, StringComparison.OrdinalIgnoreCase) && node.IsDirectory)
             {
@@ -358,18 +456,17 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public async Task CreateFolderAsync()
     {
-        if (string.IsNullOrEmpty(CurrentPath)) return;
         var folderName = await _dialogService.ShowInputDialogAsync("新しいフォルダー", "新しいフォルダー");
         if (!string.IsNullOrWhiteSpace(folderName))
         {
-            bool success = await _fileService.CreateFolderAsync(CurrentPath, folderName);
-            if (!success)
+            try
             {
-                await _dialogService.ShowErrorAsync("エラー", new Exception("フォルダーを作成できませんでした。"));
-            }
-            else
-            {
+                await _fileService.CreateFolderAsync(CurrentPath, folderName);
                 CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(CurrentPath));
+            }
+            catch (Exception ex)
+            {
+                await _dialogService.ShowErrorAsync("フォルダーの作成エラー", ex);
             }
         }
     }
@@ -382,13 +479,14 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         var newName = await _dialogService.ShowInputDialogAsync("名前の変更", node.Name);
         if (!string.IsNullOrWhiteSpace(newName) && newName != node.Name)
         {
-            if (!await _fileService.RenameAsync(node.FullPath, newName))
+            try
             {
-                await _dialogService.ShowErrorAsync("エラー", new Exception("名前を変更できませんでした。"));
-            }
-            else
-            {
+                await _fileService.RenameAsync(node.FullPath, newName);
                 CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(CurrentPath));
+            }
+            catch (Exception ex)
+            {
+                await _dialogService.ShowErrorAsync("名前の変更エラー", ex);
             }
         }
     }
@@ -401,23 +499,33 @@ public partial class FilePaneViewModel : ObservableObject, IDisposable
         {
             var nodesToDelete = SelectedItems.ToList();
             bool deletedAny = false;
+            var exceptions = new List<Exception>();
+            
             foreach (var node in nodesToDelete)
             {
-                if (await _fileService.DeleteToRecycleBinAsync(node.FullPath))
+                try
                 {
+                    await _fileService.DeleteToRecycleBinAsync(node.FullPath);
                     CurrentFolderItems.Remove(node);
                     deletedAny = true;
                 }
-                else
+                catch (Exception ex)
                 {
-                    await _dialogService.ShowErrorAsync("エラー", new Exception($"'{node.Name}' を削除できませんでした。"));
+                    exceptions.Add(new Exception($"'{node.Name}' を削除できませんでした: {ex.Message}", ex));
                 }
             }
+            
             if (deletedAny)
             {
                 CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new RobustFiler.Messages.FileSystemChangedMessage(CurrentPath));
             }
+            
             SelectedItems.Clear();
+            
+            if (exceptions.Count > 0)
+            {
+                await _dialogService.ShowErrorAsync("削除エラー", new AggregateException(exceptions));
+            }
         }
     }
 

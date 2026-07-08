@@ -110,67 +110,51 @@ public class LocalFileService : IFileService
         });
     }
 
-    public async Task<bool> DeleteToRecycleBinAsync(string path)
+    public async Task DeleteToRecycleBinAsync(string path)
     {
-        return await Task.Run(() =>
+        await Task.Run(() =>
         {
-            try
+            var shf = new SHFILEOPSTRUCT
             {
-                var shf = new SHFILEOPSTRUCT
-                {
-                    wFunc = FO_DELETE,
-                    pFrom = path + '\0' + '\0', // Must be double-null terminated
-                    fFlags = (ushort)(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT)
-                };
-                int result = SHFileOperation(ref shf);
-                return result == 0 && !shf.fAnyOperationsAborted;
-            }
-            catch
+                wFunc = FO_DELETE,
+                pFrom = path + '\0' + '\0', // Must be double-null terminated
+                fFlags = (ushort)(FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT)
+            };
+            int result = SHFileOperation(ref shf);
+            if (result != 0 || shf.fAnyOperationsAborted)
             {
-                return false;
+                throw new IOException($"ファイルまたはフォルダー '{Path.GetFileName(path)}' をごみ箱に移動できませんでした。(エラーコード: {result})");
             }
         });
     }
 
-    public async Task<bool> RenameAsync(string oldPath, string newName)
+    public async Task RenameAsync(string oldPath, string newName)
     {
-        return await Task.Run(() =>
+        await Task.Run(() =>
         {
-            try
+            var parent = Path.GetDirectoryName(oldPath);
+            var newPath = Path.Combine(parent ?? "", newName);
+            if (Directory.Exists(oldPath))
             {
-                var parent = Path.GetDirectoryName(oldPath);
-                var newPath = Path.Combine(parent ?? "", newName);
-                if (Directory.Exists(oldPath))
-                {
-                    Directory.Move(oldPath, newPath);
-                }
-                else if (File.Exists(oldPath))
-                {
-                    File.Move(oldPath, newPath);
-                }
-                return true;
+                Directory.Move(oldPath, newPath);
             }
-            catch
+            else if (File.Exists(oldPath))
             {
-                return false;
+                File.Move(oldPath, newPath);
+            }
+            else
+            {
+                throw new FileNotFoundException($"指定されたファイルまたはフォルダーが見つかりません。({oldPath})");
             }
         });
     }
 
-    public async Task<bool> CreateFolderAsync(string parentPath, string folderName)
+    public async Task CreateFolderAsync(string parentPath, string folderName)
     {
-        return await Task.Run(() =>
+        await Task.Run(() =>
         {
-            try
-            {
-                var newPath = Path.Combine(parentPath, folderName);
-                Directory.CreateDirectory(newPath);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
+            var newPath = Path.Combine(parentPath, folderName);
+            Directory.CreateDirectory(newPath);
         });
     }
 
@@ -247,19 +231,32 @@ public class LocalFileService : IFileService
     {
         await Task.Run(() =>
         {
+            var exceptions = new List<Exception>();
             foreach (var path in sourcePaths)
             {
-                if (File.Exists(path))
+                try
                 {
-                    var dest = Path.Combine(destinationPath, Path.GetFileName(path));
-                    File.Copy(path, dest, overwrite: true);
+                    if (File.Exists(path))
+                    {
+                        var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                        File.Copy(path, dest, overwrite: true);
+                    }
+                    else if (Directory.Exists(path))
+                    {
+                        var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                        if (string.Equals(path, dest, StringComparison.OrdinalIgnoreCase)) continue; // ignore
+                        CopyDirectory(path, dest);
+                    }
                 }
-                else if (Directory.Exists(path))
+                catch (Exception ex)
                 {
-                    var dest = Path.Combine(destinationPath, Path.GetFileName(path));
-                    if (string.Equals(path, dest, StringComparison.OrdinalIgnoreCase)) continue; // ignore
-                    CopyDirectory(path, dest);
+                    exceptions.Add(new Exception($"'{Path.GetFileName(path)}' のコピー中にエラーが発生しました: {ex.Message}", ex));
                 }
+            }
+
+            if (exceptions.Count > 0)
+            {
+                throw new AggregateException(exceptions);
             }
         });
     }
@@ -268,19 +265,32 @@ public class LocalFileService : IFileService
     {
         await Task.Run(() =>
         {
+            var exceptions = new List<Exception>();
             foreach (var path in sourcePaths)
             {
-                var dest = Path.Combine(destinationPath, Path.GetFileName(path));
-                if (string.Equals(path, dest, StringComparison.OrdinalIgnoreCase)) continue; // skip if moving to same location
+                try
+                {
+                    var dest = Path.Combine(destinationPath, Path.GetFileName(path));
+                    if (string.Equals(path, dest, StringComparison.OrdinalIgnoreCase)) continue; // skip if moving to same location
 
-                if (File.Exists(path))
-                {
-                    File.Move(path, dest, overwrite: true);
+                    if (File.Exists(path))
+                    {
+                        File.Move(path, dest, overwrite: true);
+                    }
+                    else if (Directory.Exists(path))
+                    {
+                        Directory.Move(path, dest);
+                    }
                 }
-                else if (Directory.Exists(path))
+                catch (Exception ex)
                 {
-                    Directory.Move(path, dest);
+                    exceptions.Add(new Exception($"'{Path.GetFileName(path)}' の移動中にエラーが発生しました: {ex.Message}", ex));
                 }
+            }
+
+            if (exceptions.Count > 0)
+            {
+                throw new AggregateException(exceptions);
             }
         });
     }

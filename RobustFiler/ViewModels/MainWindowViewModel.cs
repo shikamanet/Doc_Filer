@@ -310,10 +310,28 @@ public partial class MainWindowViewModel : ObservableObject
     private TabItemViewModel CreateTabFromState(TabState tabState)
     {
         var primaryPane = new FilePaneViewModel(_fileService, _dialogService);
-        if (!string.IsNullOrEmpty(tabState.PrimaryPath))
+        var dispatcherQueue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread() ?? App.Current.MainWindow?.DispatcherQueue;
+
+        Task.Run(async () =>
         {
-            _ = primaryPane.NavigateAsync(tabState.PrimaryPath);
-        }
+            if (!string.IsNullOrEmpty(tabState.PrimaryTreeRootPath) && System.IO.Directory.Exists(tabState.PrimaryTreeRootPath))
+            {
+                await primaryPane.NavigateToPathAsync(tabState.PrimaryTreeRootPath, false, NavigationSource.TreeView);
+            }
+
+            if (!string.IsNullOrEmpty(tabState.PrimaryPath))
+            {
+                await primaryPane.NavigateAsync(tabState.PrimaryPath);
+            }
+
+            if (tabState.PrimaryExpandedPaths != null && dispatcherQueue != null)
+            {
+                dispatcherQueue.TryEnqueue(async () =>
+                {
+                    await primaryPane.RestoreExpandedPathsAsync(tabState.PrimaryExpandedPaths);
+                });
+            }
+        });
 
         var tab = new TabItemViewModel(primaryPane) { Header = tabState.Header, IsLocked = tabState.IsLocked };
         
@@ -341,18 +359,36 @@ public partial class MainWindowViewModel : ObservableObject
                 {
                     Header = t.Header,
                     PrimaryPath = t.PrimaryPane.CurrentPath,
-                    IsLocked = t.IsLocked
+                    IsLocked = t.IsLocked,
+                    PrimaryExpandedPaths = GetExpandedPaths(t.PrimaryPane.RootDrives),
+                    PrimaryTreeRootPath = t.PrimaryPane.TreeRootPath
                 }).ToList(),
                 SecondarySelectedTabIndex = g.SecondarySelectedTab != null ? g.SecondaryTabs.IndexOf(g.SecondarySelectedTab) : 0,
                 SecondaryTabs = g.SecondaryTabs.Select(t => new TabState
                 {
                     Header = t.Header,
                     PrimaryPath = t.PrimaryPane.CurrentPath,
-                    IsLocked = t.IsLocked
+                    IsLocked = t.IsLocked,
+                    PrimaryExpandedPaths = GetExpandedPaths(t.PrimaryPane.RootDrives),
+                    PrimaryTreeRootPath = t.PrimaryPane.TreeRootPath
                 }).ToList()
             }).ToList()
         };
         await _fileService.SaveSessionAsync(session);
+    }
+
+    private List<string> GetExpandedPaths(IEnumerable<FileNodeViewModel> nodes)
+    {
+        var paths = new List<string>();
+        foreach (var node in nodes)
+        {
+            if (node.IsExpanded)
+            {
+                paths.Add(node.FullPath);
+                paths.AddRange(GetExpandedPaths(node.Children));
+            }
+        }
+        return paths;
     }
 
     partial void OnSelectedFavoriteChanged(FavoriteItem? value)
